@@ -46,3 +46,10 @@ next-env.d.ts
 
 #vscode
 .history/
+.vscode/
+
+#claude
+.claude/
+
+#本地配置
+pnpm-workspace.yaml
