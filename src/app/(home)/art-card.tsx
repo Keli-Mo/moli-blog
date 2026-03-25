@@ -5,6 +5,10 @@ import { CARD_SPACING } from '@/consts'
 import { useRouter } from 'next/navigation'
 import { HomeDraggableLayer } from './home-draggable-layer'
 
+/**
+ * Art Card - 首页图片瀑布流入口卡片
+ * 点击进入 gallery 页面查看图片瀑布流展示
+ */
 export default function ArtCard() {
 	const center = useCenterStore()
 	const { cardStyles, siteContent } = useConfigStore()
@@ -23,18 +27,13 @@ export default function ArtCard() {
 	return (
 		<HomeDraggableLayer cardKey='artCard' x={x} y={y} width={styles.width} height={styles.height}>
 			<Card className='p-2 max-sm:static max-sm:translate-0' order={styles.order} width={styles.width} height={styles.height} x={x} y={y}>
-				{siteContent.enableChristmas && (
-					<>
-						<img
-							src='/images/christmas/snow-3.webp'
-							alt='Christmas decoration'
-							className='pointer-events-none absolute'
-							style={{ width: 160, right: -8, top: -16, opacity: 0.9 }}
-						/>
-					</>
-				)}
-
-				<img onClick={() => router.push('/pictures')} src={artUrl} alt='wall art' className='h-full w-full rounded-[32px] object-cover' />
+				{/* 点击进入图片瀑布流页面 */}
+				<img 
+					onClick={() => router.push('/gallery')} 
+					src={artUrl} 
+					alt='wall art' 
+					className='h-full w-full rounded-[32px] object-cover cursor-pointer transition-opacity hover:opacity-80' 
+				/>
 			</Card>
 		</HomeDraggableLayer>
 	)
