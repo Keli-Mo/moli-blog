@@ -9,8 +9,8 @@ export const BLOG_SLUG_KEY = process.env.BLOG_SLUG_KEY || ''
  */
 export const GITHUB_CONFIG = {
 	OWNER: process.env.NEXT_PUBLIC_GITHUB_OWNER || 'Keli-Mo',
-	REPO: process.env.NEXT_PUBLIC_GITHUB_REPO || 'YYsuni-blog',
+	REPO: process.env.NEXT_PUBLIC_GITHUB_REPO || 'moli-blog',
 	BRANCH: process.env.NEXT_PUBLIC_GITHUB_BRANCH || 'main',
-	APP_ID: process.env.NEXT_PUBLIC_GITHUB_APP_ID || '-',
+	APP_ID: process.env.NEXT_PUBLIC_GITHUB_APP_ID || '3181209',
 	ENCRYPT_KEY: process.env.NEXT_PUBLIC_GITHUB_ENCRYPT_KEY || 'wudishiduomejimo',
 } as const
