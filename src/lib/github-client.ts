@@ -133,7 +133,13 @@ export async function createTree(token: string, owner: string, repo: string, tre
 		body: JSON.stringify({ tree, base_tree: baseTree })
 	})
 	if (res.status === 401) handle401Error()
-	if (res.status === 422) handle422Error()
+	if (res.status === 422) {
+		// 获取详细的错误信息
+		const errorData = await res.json().catch(() => null)
+		console.error('GitHub API 422 错误详情:', errorData)
+		handle422Error()
+		throw new Error(`create tree failed: 422 - ${errorData?.message || JSON.stringify(errorData)}`)
+	}
 	if (!res.ok) throw new Error(`create tree failed: ${res.status}`)
 	const data = await res.json()
 	return { sha: data.sha }

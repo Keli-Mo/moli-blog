@@ -1,4 +1,4 @@
-import { toBase64Utf8, getRef, createTree, createCommit, updateRef, createBlob, readTextFileFromRepo, type TreeItem } from '@/lib/github-client'
+import { toBase64Utf8, getRef, getFileSha, createTree, createCommit, updateRef, createBlob, readTextFileFromRepo, type TreeItem } from '@/lib/github-client'
 import { fileToBase64NoPrefix, hashFileSHA256 } from '@/lib/file-utils'
 import { getAuthToken } from '@/lib/auth'
 import { GITHUB_CONFIG } from '@/consts'
@@ -112,12 +112,22 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 					// 这是一个本地图片文件，需要删除
 					const filename = url.replace('/images/pictures/', '')
 					const path = `public/images/pictures/${filename}`
-					treeItems.push({
-						path,
-						mode: '100644',
-						type: 'blob',
-						sha: null
-					})
+
+					// 检查文件是否存在于 Git 仓库中，只有存在时才尝试删除
+					// 避免尝试删除从未提交过的文件（会导致 422 错误）
+
+					const fileSha = await getFileSha(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, path, GITHUB_CONFIG.BRANCH)
+					if (fileSha) {
+						console.log('文件存在于仓库中，准备删除:', path)
+						treeItems.push({
+							path,
+							mode: '100644',
+							type: 'blob',
+							sha: null
+						})
+					} else {
+						console.log('文件不存在于仓库中，跳过删除:', path)
+					}
 				}
 			}
 		} catch (error) {
@@ -128,13 +138,30 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 	const picturesJson = JSON.stringify(updatedPictures, null, '\t')
 	const picturesBlob = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(picturesJson), 'base64')
 	treeItems.push({
-		path: 'src/app/pictures/list.json',
+		path: 'src/app/gallery/list.json',
 		mode: '100644',
 		type: 'blob',
 		sha: picturesBlob.sha
 	})
 
 	toast.info('正在创建文件树...')
+
+	if (treeItems.length === 0) {
+		throw new Error('没有要提交的文件')
+	}
+
+	// 检查重复路径
+	const paths = treeItems.map(item => item.path)
+	const uniquePaths = new Set(paths)
+	if (paths.length !== uniquePaths.size) {
+		throw new Error('检测到重复的文件路径')
+	}
+
+	// 调试：打印 treeItems 内容
+	console.log('Tree items:', JSON.stringify(treeItems, null, 2))
+	console.log('Latest commit SHA:', latestCommitSha)
+	console.log('Tree items count:', treeItems.length)
+
 	const treeData = await createTree(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, treeItems, latestCommitSha)
 
 	toast.info('正在创建提交...')
