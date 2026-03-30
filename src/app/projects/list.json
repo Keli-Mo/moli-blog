@@ -77,5 +77,17 @@
 			"Library"
 		],
 		"github": "https://github.com/YYsuni/archive-suni"
+	},
+	{
+		"name": "123",
+		"year": 2026,
+		"image": "http://1",
+		"url": "1",
+		"description": "1",
+		"tags": [
+			"1"
+		],
+		"github": "123",
+		"npm": "123"
 	}
 ]
