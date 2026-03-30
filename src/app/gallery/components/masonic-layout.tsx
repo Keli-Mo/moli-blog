@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, ComponentType } from 'react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { Masonry } from 'masonic'
 import { Picture } from '../page'
 import { X } from 'lucide-react'
@@ -24,9 +24,56 @@ interface MasonicLayoutProps {
 }
 
 /**
+ * ImageLightbox - 图片放大灯箱组件
+ * 点击图片后全屏展示，支持点击遮罩或按 Esc 关闭
+ */
+function ImageLightbox({ url, description, onClose }: { url: string; description?: string; onClose: () => void }) {
+	useEffect(() => {
+		// 按 Esc 键关闭灯箱
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') onClose()
+		}
+		window.addEventListener('keydown', handleKeyDown)
+		return () => window.removeEventListener('keydown', handleKeyDown)
+	}, [onClose])
+
+	return (
+		<motion.div
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
+			exit={{ opacity: 0 }}
+			onClick={onClose}
+			className='fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'>
+			{/* 关闭按钮 */}
+			<button
+				onClick={onClose}
+				className='absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors'>
+				<X size={24} />
+			</button>
+
+			{/* 图片主体，阻止点击冒泡避免误关 */}
+			<motion.div
+				initial={{ scale: 0.9, opacity: 0 }}
+				animate={{ scale: 1, opacity: 1 }}
+				exit={{ scale: 0.9, opacity: 0 }}
+				onClick={e => e.stopPropagation()}
+				className='relative max-w-[90vw] max-h-[90vh]'>
+				<img src={url} alt={description || '图片'} className='max-w-full max-h-[90vh] object-contain rounded-lg' />
+				{/* 描述文字 */}
+				{description && (
+					<div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 rounded-b-lg'>
+						<p className='text-white text-sm'>{description}</p>
+					</div>
+				)}
+			</motion.div>
+		</motion.div>
+	)
+}
+
+/**
  * ImageCard - 单个图片卡片组件
  * 用于瀑布流中显示单张图片及其描述
- * 在编辑模式下提供删除功能
+ * 在编辑模式下提供删除功能；非编辑模式下点击可放大
  */
 function ImageCard({
 	url,
@@ -34,7 +81,8 @@ function ImageCard({
 	imageIndex,
 	description,
 	isEditMode,
-	onDelete
+	onDelete,
+	onExpand
 }: {
 	url: string
 	pictureId: string
@@ -42,6 +90,7 @@ function ImageCard({
 	description?: string
 	isEditMode?: boolean
 	onDelete: () => void
+	onExpand: () => void
 }) {
 	return (
 		<motion.div
@@ -49,11 +98,17 @@ function ImageCard({
 			animate={{ opacity: 1, scale: 1 }}
 			exit={{ opacity: 0, scale: 0.95 }}
 			className='group relative overflow-hidden rounded-lg bg-gray-100'>
-			<img src={url} alt={description || '图片'} className='w-full h-auto object-cover' />
+			{/* 非编辑模式下点击放大 */}
+			<img
+				src={url}
+				alt={description || '图片'}
+				className={`w-full h-auto object-cover ${!isEditMode ? 'cursor-zoom-in' : ''}`}
+				onClick={!isEditMode ? onExpand : undefined}
+			/>
 
-			{/* 图片描述叠加层 */}
+			{/* 图片描述叠加层 - hover 时才显示 */}
 			{description && (
-				<div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3'>
+				<div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
 					<p className='text-white text-sm line-clamp-2'>{description}</p>
 				</div>
 			)}
@@ -80,6 +135,8 @@ function ImageCard({
  */
 export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGroup }: MasonicLayoutProps) {
 	const [isClient, setIsClient] = useState(false)
+	// 当前放大展示的图片信息
+	const [lightbox, setLightbox] = useState<{ url: string; description?: string } | null>(null)
 
 	useEffect(() => {
 		setIsClient(true)
@@ -116,7 +173,9 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 
 	return (
 		<div className='w-full py-10'>
+			{/* key 随 items 长度变化，删除图片时强制重新挂载以避免 Masonic 缓存错误 */}
 			<MasonryComponent
+				key={items.length}
 				items={items}
 				columnCount={3}
 				columnGutter={16}
@@ -131,9 +190,21 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 						description={item.description}
 						isEditMode={isEditMode}
 						onDelete={() => onDeleteSingle?.(item.pictureId, item.imageIndex)}
+						onExpand={() => setLightbox({ url: item.url, description: item.description })}
 					/>
 				)}
 			/>
+
+			{/* 图片放大灯箱 */}
+			<AnimatePresence>
+				{lightbox && (
+					<ImageLightbox
+						url={lightbox.url}
+						description={lightbox.description}
+						onClose={() => setLightbox(null)}
+					/>
+				)}
+			</AnimatePresence>
 		</div>
 	)
 }

@@ -96,3 +96,8 @@ pnpm deploy       # 部署到 Cloudflare
 ### 样式系统
 
 使用 **Tailwind CSS v4**，主题色以 CSS 变量形式注入（`--color-brand`、`--color-primary` 等），在 `src/app/layout.tsx` 的 `htmlStyle` 中由 `site-content.json` 的 `theme` 字段驱动。
+
+## 代码修改原则
+
+- **最小化改动**：更改代码时只修改必要的部分，避免无关的重构或格式调整
+- **添加注释**：对每处改动添加简洁的中文注释，说明修改原因或逻辑
