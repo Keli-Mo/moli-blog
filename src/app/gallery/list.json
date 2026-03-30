@@ -2,41 +2,50 @@
 	{
 		"id": "pic-001",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/043e88bf6b427bb8.webp"]
+		"images": [
+			"/images/pictures/043e88bf6b427bb8.webp"
+		]
 	},
 	{
 		"id": "pic-002",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/328a83a46afe97d5.webp"]
-	},
-	{
-		"id": "pic-003",
-		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/46e8ad6844444fb0.webp"]
+		"images": [
+			"/images/pictures/328a83a46afe97d5.webp"
+		]
 	},
 	{
 		"id": "pic-004",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/614a7ba59af460b7.webp"]
+		"images": [
+			"/images/pictures/614a7ba59af460b7.webp"
+		]
 	},
 	{
 		"id": "pic-005",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/776ef407df1aed7d.webp"]
+		"images": [
+			"/images/pictures/776ef407df1aed7d.webp"
+		]
 	},
 	{
 		"id": "pic-006",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/521584fbd7c8c471.webp"]
+		"images": [
+			"/images/pictures/521584fbd7c8c471.webp"
+		]
 	},
 	{
 		"id": "pic-007",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/9303958202e2bcd8.webp"]
+		"images": [
+			"/images/pictures/9303958202e2bcd8.webp"
+		]
 	},
 	{
 		"id": "pic-008",
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
-		"images": ["/images/pictures/db6cb25835721682.webp"]
+		"images": [
+			"/images/pictures/db6cb25835721682.webp"
+		]
 	}
 ]
