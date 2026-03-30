@@ -1,6 +1,6 @@
 {
 	"meta": {
-		"title": "MoliOvO-Blog",
+		"title": "MoliOvO",
 		"description": "MoliOvO 的个人博客，记录前端开发、探索、笔记。\n感谢Suni大大开源——https://github.com/YYsuni/2025-blog-public",
 		"username": "Moli"
 	},
@@ -44,7 +44,7 @@
 		{
 			"id": "github",
 			"type": "github",
-			"value": "https://github.com/yysuni",
+			"value": "https://github.com/Keli-Mo",
 			"label": "Github",
 			"order": 3
 		},
@@ -58,7 +58,7 @@
 		{
 			"id": "email",
 			"type": "email",
-			"value": "yysuni1001@gmail.com",
+			"value": "2323739420@qq.com",
 			"label": "",
 			"order": 1
 		}
