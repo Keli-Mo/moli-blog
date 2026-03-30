@@ -3,10 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
-import initialList from '../pictures/list.json'
+import initialList from './list.json'
 import { MasonicLayout } from './components/masonic-layout'
-import UploadDialog from '../pictures/components/upload-dialog'
-import { pushPictures } from '../pictures/services/push-pictures'
+import UploadDialog from './components/upload-dialog'
+import { pushPictures } from './services/push-pictures'
 import { useAuthStore } from '@/hooks/use-auth'
 import { useConfigStore } from '@/app/(home)/stores/config-store'
 import type { ImageItem } from '../projects/components/image-upload-dialog'
@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation'
  * Gallery Page - 图片瀑布流展示页面
  * 使用 masonic 库实现响应式网格瀑布流布局
  * 支持图片上传、编辑、删除等功能
- * 与 /pictures 页面共享数据源 (pictures/list.json)
+ * 数据源为 gallery/list.json
  */
 
 export interface Picture {

@@ -172,7 +172,7 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 	}
 
 	return (
-		<div className='w-full py-10'>
+		<div className='w-full py-10 px-4'>
 			{/* key 随 items 长度变化，删除图片时强制重新挂载以避免 Masonic 缓存错误 */}
 			<MasonryComponent
 				key={items.length}
@@ -180,7 +180,7 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 				columnCount={3}
 				columnGutter={16}
 				overscanBy={5}
-				className='px-4'
+				className=''
 				render={({ data: item }) => (
 					<ImageCard
 						key={item.key}
