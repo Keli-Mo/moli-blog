@@ -14,9 +14,11 @@ interface Props {
 	x: number
 	y: number
 	children: React.ReactNode
+	/** 为 true 时使用 fixed 定位，卡片不随页面滚动 */
+	fixed?: boolean
 }
 
-export default function Card({ children, order, width, height, x, y, className }: Props) {
+export default function Card({ children, order, width, height, x, y, className, fixed }: Props) {
 	const { maxSM, init } = useSize()
 	let [show, setShow] = useState(false)
 	if (maxSM && init) order = 0
@@ -36,6 +38,7 @@ export default function Card({ children, order, width, height, x, y, className }
 		return (
 			<motion.div
 				className={cn('card squircle', className)}
+				style={fixed ? { position: 'fixed' } : undefined}
 				initial={{ opacity: 0, scale: 0.6, left: x, top: y, width, height }}
 				animate={{ opacity: 1, scale: 1, left: x, top: y, width, height }}
 				whileHover={{ scale: 1.05 }}
