@@ -1,0 +1,24 @@
+name: Generate GitHub Snake
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  generate-snake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Snake SVG/GIF
+        uses: Platane/snk@v3
+        with:
+          github_user_name: Keli-Mo
+          outputs: |
+            dist/github-snake.svg
+            dist/github-snake-dark.svg?palette=github-dark
+            dist/ocean.gif?color_snake=orange&color_dots=#bfd6f6,#8dbdff,#64a1f4,#4b91f1,#3c7dd9&color_background=#aaaaaa
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: snake-artifacts
+          path: dist/

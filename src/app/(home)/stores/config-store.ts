@@ -3,7 +3,20 @@ import siteContent from '@/config/site-content.json'
 import cardStyles from '@/config/card-styles.json'
 
 export type SiteContent = typeof siteContent
-export type CardStyles = typeof cardStyles
+
+// 扩展 CardStyles 类型以支持动态添加的卡片
+type BaseCardStyle = {
+	width: number
+	height: number
+	order: number
+	offsetX: number | null
+	offsetY: number | null
+	enabled: boolean
+}
+
+export type CardStyles = typeof cardStyles & {
+	snkGithubActivityCalendar?: BaseCardStyle
+}
 
 interface ConfigStore {
 	siteContent: SiteContent
