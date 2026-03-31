@@ -109,8 +109,8 @@
 		"width": 400,
 		"height": 120,
 		"order": 12,
-		"offsetX": null,
-		"offsetY": null,
+		"offsetX": 202,
+		"offsetY": 284,
 		"enabled": true
 	}
 }
