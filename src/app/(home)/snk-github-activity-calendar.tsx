@@ -16,7 +16,7 @@ export default function SnkGithubActivityCalendar() {
 	return (
 		<HomeDraggableLayer cardKey='snkGithubActivityCalendar' x={x} y={y} width={styles.width} height={styles.height}>
 			<Card order={styles.order} width={styles.width} height={styles.height} x={x} y={y} className='flex items-center justify-center overflow-hidden'>
-				<img src='/github/github-snake.svg' alt='GitHub Activity Calendar' className='h-full w-full object-contain' />
+				<img src='/src/svgs/github-snake.svg' alt='GitHub Activity Calendar' className='h-full w-full object-contain' />
 			</Card>
 		</HomeDraggableLayer>
 	)
