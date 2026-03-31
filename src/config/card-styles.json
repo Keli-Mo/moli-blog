@@ -106,11 +106,11 @@
 		"enabled": false
 	},
 	"snkGithubActivityCalendar": {
-		"width": 400,
-		"height": 120,
+		"width": 753,
+		"height": 226,
 		"order": 12,
-		"offsetX": 202,
-		"offsetY": 284,
+		"offsetX": 184,
+		"offsetY": 248,
 		"enabled": true
 	}
 }
