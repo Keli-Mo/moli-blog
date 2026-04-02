@@ -105,6 +105,14 @@
 		"offsetY": null,
 		"enabled": false
 	},
+	"imgbedCard": {
+		"width": 270,
+		"height": 271,
+		"order": 9,
+		"offsetX": 477,
+		"offsetY": -368,
+		"enabled": true
+	},
 	"snkGithubActivityCalendar": {
 		"width": 753,
 		"height": 226,
