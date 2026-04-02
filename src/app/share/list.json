@@ -232,5 +232,15 @@
 			"3D"
 		],
 		"stars": 3
+	},
+	{
+		"name": "基于tele或cf的图床",
+		"logo": "blob:https://moliovo-blog.vercel.app/c94e8b8d-5977-414b-a2b7-c072976ed536",
+		"url": "https://github.com/MarSeventh/CloudFlare-ImgBed",
+		"description": "超级无敌好的图床",
+		"tags": [
+			"图片"
+		],
+		"stars": 5
 	}
 ]
