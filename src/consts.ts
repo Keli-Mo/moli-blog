@@ -1,3 +1,6 @@
+// 图床地址，修改此处即可更新入口卡片的跳转链接
+export const IMGBED_URL = 'https://cloudflare-imgbed-9ut.pages.dev/'
+
 export const INIT_DELAY = 0.3
 export const ANIMATION_DELAY = 0.1
 export const CARD_SPACING = 36
