@@ -13,6 +13,7 @@ import HatCard from './hat-card'
 import BeianCard from './beian-card'
 import SnkGithubActivityCalendar from './snk-github-activity-calendar'
 import ImgbedCard from './imgbed-card'
+import RhineLabCard from './rhine-lab-card'
 import { useSize } from '@/hooks/use-size'
 import { motion } from 'motion/react'
 import { useLayoutEditStore } from './stores/layout-edit-store'
@@ -80,6 +81,7 @@ export default function Home() {
 
 			<div className='max-sm:flex max-sm:flex-col max-sm:items-center max-sm:gap-6 max-sm:pt-28 max-sm:pb-20'>
 				{cardStyles.artCard?.enabled !== false && <ArtCard />}
+				{cardStyles.rhineLabCard?.enabled !== false && <RhineLabCard />}
 				{cardStyles.hiCard?.enabled !== false && <HiCard />}
 				{!maxSM && cardStyles.clockCard?.enabled !== false && <ClockCard />}
 				{!maxSM && cardStyles.calendarCard?.enabled !== false && <CalendarCard />}

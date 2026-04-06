@@ -1,0 +1,18 @@
+{
+  "files": {
+    "main.css": "./static/css/main.bdbbed26.css",
+    "main.js": "./static/js/main.f8666f61.js",
+    "static/js/887.5f1bcd39.chunk.js": "./static/js/887.5f1bcd39.chunk.js",
+    "static/media/rhineLab.png": "./static/media/rhineLab.e1aec6054923e3d270c9.png",
+    "static/media/Novecento-Wide-Bold.otf": "./static/media/Novecento-Wide-Bold.4d1e76056b6946585827.otf",
+    "static/media/Novecento-Wide-Medium.otf": "./static/media/Novecento-Wide-Medium.713923a1e7ebfc2221e5.otf",
+    "index.html": "./index.html",
+    "main.bdbbed26.css.map": "./static/css/main.bdbbed26.css.map",
+    "main.f8666f61.js.map": "./static/js/main.f8666f61.js.map",
+    "887.5f1bcd39.chunk.js.map": "./static/js/887.5f1bcd39.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.bdbbed26.css",
+    "static/js/main.f8666f61.js"
+  ]
+}

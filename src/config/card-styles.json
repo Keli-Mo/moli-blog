@@ -120,5 +120,13 @@
 		"offsetX": 184,
 		"offsetY": 248,
 		"enabled": true
+	},
+	"rhineLabCard": {
+		"width": 180,
+		"height": 120,
+		"order": 2,
+		"offsetX": null,
+		"offsetY": null,
+		"enabled": true
 	}
 }

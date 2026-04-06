@@ -7,6 +7,7 @@ import cardStylesDefault from '@/config/card-styles-default.json'
 
 const CARD_LABELS: Record<string, string> = {
 	artCard: '首图',
+	rhineLabCard: 'Rhine Lab',
 	hiCard: '中心',
 	clockCard: '时钟',
 	calendarCard: '日历',
