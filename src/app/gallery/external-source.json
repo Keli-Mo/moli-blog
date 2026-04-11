@@ -1,5 +1,5 @@
 {
-	"enabled": false,
+	"enabled": true,
 	"urlTemplate": "https://cloudflare-imgbed-9ut.pages.dev/file/{n}.webp",
 	"start": 1,
 	"end": 50,

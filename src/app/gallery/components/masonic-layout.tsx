@@ -142,20 +142,13 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 		setIsClient(true)
 	}, [])
 
-	if (!isClient) {
-		return null
-	}
-
 	/**
 	 * 将图片组数据结构扁平化为单个图片列表
 	 * 便于 masonic 库进行网格布局计算
-	 * 每个图片对象包含展示所需的全部信息
 	 */
 	const items = useMemo(() => {
 		return pictures.flatMap((picture, groupIndex) => {
-			// 兼容新的 images 数组和旧的 image 单图字段
 			const urls = picture.images && picture.images.length > 0 ? picture.images : picture.image ? [picture.image] : []
-
 			return urls.map((url, imageIndex) => ({
 				key: `${picture.id}::${imageIndex === urls.length - 1 && urls.length === 1 ? 'single' : imageIndex}`,
 				url,
@@ -167,15 +160,24 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 		})
 	}, [pictures])
 
+	// 直接使用 items.length 作为 key，确保每次长度变化都重新挂载 Masonry
+	// 避免 masonic 内部缓存与新的 items 长度不一致导致报错
+	const masonryKey = items.length
+
+	// 服务端渲染时返回 null，避免 Hydration 不匹配
+	if (!isClient) {
+		return null
+	}
+
 	if (items.length === 0) {
 		return null
 	}
 
 	return (
 		<div className='w-full py-10 px-4'>
-			{/* key 随 items 长度变化，删除图片时强制重新挂载以避免 Masonic 缓存错误 */}
+			{/* key 随 items.length 变化，避免 masonic 缓存错误 */}
 			<MasonryComponent
-				key={items.length}
+				key={masonryKey}
 				items={items}
 				columnCount={3}
 				columnGutter={16}

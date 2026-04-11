@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import initialList from './list.json'
 import externalSourceConfig from './external-source.json'
+import externalIndex from './external-index.json'
 import { MasonicLayout } from './components/masonic-layout'
 import UploadDialog from './components/upload-dialog'
 import ExternalSourceDialog from './components/external-source-config'
@@ -15,11 +16,12 @@ import { useConfigStore } from '@/app/(home)/stores/config-store'
 import type { ImageItem } from '../projects/components/image-upload-dialog'
 import { useRouter } from 'next/navigation'
 import type { ExternalSourceConfig } from './components/external-source-config'
+import { loadExternalConfig, saveExternalConfig } from './lib/storage'
 
 /**
  * Gallery Page - 图片瀑布流展示页面
  * 支持本地图片（list.json）+ 外部图源（R2等）混合显示
- * 外部图源自动检测可用图片，只显示能加载的图片
+ * 外部图源使用本地索引文件（external-index.json），无需每次检测
  */
 
 export interface Picture {
@@ -32,67 +34,52 @@ export interface Picture {
 
 /**
  * 检测图片 URL 是否存在
- * 使用 fetch HEAD 请求检查真实 HTTP 状态码
- * 404页面会返回 HTML，但 status 是 404，可以正确识别
+ * 直接使用 Image 对象加载，不依赖 CORS
  */
-async function checkImageExists(url: string): Promise<boolean> {
-	try {
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 5000)
-
-		const response = await fetch(url, {
-			method: 'HEAD',
-			mode: 'cors',
-			signal: controller.signal
-		})
-
-		clearTimeout(timeoutId)
-
-		// 只接受 200-299 状态码，404/403/500 等都认为不存在
-		return response.ok
-	} catch {
-		// fetch 失败（可能是 CORS 或网络问题），降级使用 Image 对象检测
-		return new Promise(resolve => {
-			const img = new Image()
-			// 设置跨域属性
-			img.crossOrigin = 'anonymous'
-
-			img.onload = () => resolve(true)
-			img.onerror = () => resolve(false)
-
-			// 添加时间戳避免缓存
-			img.src = url + (url.includes('?') ? '&' : '?') + '_check=' + Date.now()
-
-			setTimeout(() => resolve(false), 5000)
-		})
-	}
+function checkImageExists(url: string): Promise<boolean> {
+	return new Promise(resolve => {
+		const img = new Image()
+		img.onload = () => resolve(true)
+		img.onerror = () => resolve(false)
+		img.src = url + (url.includes('?') ? '&' : '?') + '_check=' + Date.now()
+		setTimeout(() => resolve(false), 5000)
+	})
 }
 
 /**
- * 批量检测图片是否存在
- * 并发检测，每批 5 个
+ * 从配置生成 URL 列表
  */
-async function batchCheckImages(urls: string[], onProgress?: (checked: number) => void): Promise<string[]> {
-	const batchSize = 5
-	const validUrls: string[] = []
-
-	for (let i = 0; i < urls.length; i += batchSize) {
-		const batch = urls.slice(i, i + batchSize)
-		const results = await Promise.all(
-			batch.map(async url => ({
-				url,
-				exists: await checkImageExists(url)
-			}))
-		)
-
-		results.forEach(({ url, exists }) => {
-			if (exists) validUrls.push(url)
-		})
-
-		onProgress?.(Math.min(i + batchSize, urls.length))
+function generateUrlsFromConfig(config: ExternalSourceConfig): string[] {
+	if (!config.enabled || !config.urlTemplate.includes('{n}')) {
+		return []
 	}
+	const urls: string[] = []
+	for (let i = config.start; i <= config.end; i++) {
+		urls.push(config.urlTemplate.replace('{n}', String(i)))
+	}
+	return urls
+}
 
-	return validUrls
+/**
+ * 将 URL 列表转换为 Picture 对象
+ */
+function urlsToPictures(urls: string[], description?: string): Picture[] {
+	const now = new Date().toISOString()
+	return urls.map((url, index) => ({
+		id: `external-${index}`,
+		uploadedAt: now,
+		description: description || undefined,
+		images: [url]
+	}))
+}
+
+/**
+ * 合并默认配置和本地存储配置
+ */
+function getInitialConfig(): ExternalSourceConfig {
+	const defaultConfig = { ...(externalSourceConfig as ExternalSourceConfig), enabled: true }
+	const saved = loadExternalConfig()
+	return saved || defaultConfig
 }
 
 export default function GalleryPage() {
@@ -102,9 +89,9 @@ export default function GalleryPage() {
 	const [isSaving, setIsSaving] = useState(false)
 	const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
 	const [isExternalSourceOpen, setIsExternalSourceOpen] = useState(false)
-	const [externalConfig, setExternalConfig] = useState<ExternalSourceConfig>(externalSourceConfig as ExternalSourceConfig)
+	const [externalConfig, setExternalConfig] = useState<ExternalSourceConfig>(getInitialConfig())
 	const [externalPictures, setExternalPictures] = useState<Picture[]>([])
-	const [isCheckingExternal, setIsCheckingExternal] = useState(false)
+	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [checkedCount, setCheckedCount] = useState(0)
 	const [imageItems, setImageItems] = useState<Map<string, ImageItem>>(new Map())
 	const keyInputRef = useRef<HTMLInputElement>(null)
@@ -115,49 +102,82 @@ export default function GalleryPage() {
 	const hideEditButton = siteContent.hideEditButton ?? false
 
 	/**
-	 * 检测并更新外部图源图片
+	 * 从本地索引加载外部图源图片
 	 */
-	const refreshExternalPictures = useCallback(async () => {
-		if (!externalConfig.enabled || !externalConfig.urlTemplate.includes('{n}')) {
+	const loadFromIndex = useCallback(() => {
+		if (!externalConfig.enabled) {
 			setExternalPictures([])
 			return
 		}
 
-		setIsCheckingExternal(true)
-		setCheckedCount(0)
-
-		// 生成 URL 列表
-		const urls: string[] = []
-		for (let i = externalConfig.start; i <= externalConfig.end; i++) {
-			urls.push(externalConfig.urlTemplate.replace('{n}', String(i)))
-		}
-
-		// 批量检测
-		const validUrls = await batchCheckImages(urls, setCheckedCount)
-
-		// 生成 Picture 对象
-		const now = new Date().toISOString()
-		const pictures: Picture[] = validUrls.map((url, index) => ({
-			id: `external-${index}`,
-			uploadedAt: now,
-			description: externalConfig.description || undefined,
-			images: [url]
-		}))
-
-		setExternalPictures(pictures)
-		setIsCheckingExternal(false)
-
-		if (validUrls.length < urls.length) {
-			toast.success(`检测到 ${validUrls.length}/${urls.length} 张可用图片`)
+		// 优先使用本地索引文件中的 URL
+		const indexUrls = (externalIndex as { updatedAt: string; urls: string[] }).urls
+		if (indexUrls && indexUrls.length > 0) {
+			setExternalPictures(urlsToPictures(indexUrls, externalConfig.description))
+		} else {
+			// 索引为空时，生成 URL 但不检测（等待用户手动刷新）
+			const urls = generateUrlsFromConfig(externalConfig)
+			setExternalPictures(urlsToPictures(urls, externalConfig.description))
 		}
 	}, [externalConfig])
 
 	/**
-	 * 配置改变时重新检测
+	 * 手动刷新 - 检测所有图片并更新索引
+	 */
+	const handleRefreshIndex = useCallback(async () => {
+		if (!externalConfig.enabled || !externalConfig.urlTemplate.includes('{n}')) {
+			toast.error('请先启用外部图源并配置 URL 模板')
+			return
+		}
+
+		setIsRefreshing(true)
+		setCheckedCount(0)
+
+		const urls = generateUrlsFromConfig(externalConfig)
+		const validUrls: string[] = []
+		const batchSize = 5
+
+		// 批量检测
+		for (let i = 0; i < urls.length; i += batchSize) {
+			const batch = urls.slice(i, i + batchSize)
+			const results = await Promise.all(
+				batch.map(async url => {
+					const exists = await checkImageExists(url)
+					return { url, exists }
+				})
+			)
+
+			results.forEach(({ url, exists }) => {
+				if (exists) validUrls.push(url)
+			})
+
+			setCheckedCount(Math.min(i + batchSize, urls.length))
+		}
+
+		// 更新显示
+		setExternalPictures(urlsToPictures(validUrls, externalConfig.description))
+		setIsRefreshing(false)
+
+		// 保存到索引文件（如果已登录）
+		if (isAuth) {
+			try {
+				const { pushExternalIndex } = await import('./services/push-external-index')
+				await pushExternalIndex(validUrls)
+				toast.success(`已更新索引: ${validUrls.length}/${urls.length} 张图片`)
+			} catch (error) {
+				toast.error('保存索引失败，但当前页面已更新')
+			}
+		} else {
+			toast.success(`检测完成: ${validUrls.length}/${urls.length} 张图片（未登录，索引未保存）`)
+		}
+	}, [externalConfig, isAuth])
+
+	/**
+	 * 初始加载和配置变更时重新加载
 	 */
 	useEffect(() => {
-		refreshExternalPictures()
-	}, [refreshExternalPictures])
+		loadFromIndex()
+	}, [loadFromIndex])
 
 	/**
 	 * 合并本地图片和外部图源图片
@@ -165,7 +185,7 @@ export default function GalleryPage() {
 	const allPictures = [...externalPictures, ...localPictures]
 
 	/**
-	 * 处理上传提交 - 创建新的图片组条目并加入到本地列表
+	 * 处理上传提交
 	 */
 	const handleUploadSubmit = ({ images, description }: { images: ImageItem[]; description: string }) => {
 		const now = new Date().toISOString()
@@ -205,13 +225,13 @@ export default function GalleryPage() {
 	 */
 	const handleExternalSourceSave = async (config: ExternalSourceConfig) => {
 		setExternalConfig(config)
-		toast.success('外部图源配置已更新，正在检测可用图片...')
+		saveExternalConfig(config)
+		toast.success('外部图源配置已更新')
 
 		if (isAuth) {
 			try {
 				const { pushExternalSourceConfig } = await import('./services/push-external-source')
 				await pushExternalSourceConfig(config)
-				toast.success('配置已保存到仓库')
 			} catch {
 				// 静默失败
 			}
@@ -358,7 +378,7 @@ export default function GalleryPage() {
 
 	const handleCancel = () => {
 		setLocalPictures(originalPictures)
-		setExternalConfig(externalSourceConfig as ExternalSourceConfig)
+		setExternalConfig(getInitialConfig())
 		setImageItems(new Map())
 		setIsEditMode(false)
 	}
@@ -378,12 +398,6 @@ export default function GalleryPage() {
 			window.removeEventListener('keydown', handleKeyDown)
 		}
 	}, [isEditMode])
-
-	// 计算检测进度
-	const totalToCheck = externalConfig.enabled
-		? externalConfig.end - externalConfig.start + 1
-		: 0
-	const checkProgress = totalToCheck > 0 ? Math.round((checkedCount / totalToCheck) * 100) : 0
 
 	return (
 		<>
@@ -411,23 +425,6 @@ export default function GalleryPage() {
 			{allPictures.length === 0 && (
 				<div className='text-secondary flex min-h-screen items-center justify-center text-center text-sm'>
 					还没有上传图片，点击右上角「编辑」后即可开始上传。
-				</div>
-			)}
-
-			{/* 外部图源检测提示 */}
-			{externalConfig.enabled && (
-				<div className='absolute top-4 left-6 text-xs text-gray-500'>
-					{isCheckingExternal ? (
-						<span className='flex items-center gap-1'>
-							<Loader2 className='h-3 w-3 animate-spin' />
-							检测外部图片 {checkedCount}/{totalToCheck} ({checkProgress}%)
-						</span>
-					) : (
-						<>
-							外部图源: {externalPictures.length} 张
-							{localPictures.length > 0 && ` | 本地: ${localPictures.length} 张`}
-						</>
-					)}
 				</div>
 			)}
 
@@ -494,7 +491,16 @@ export default function GalleryPage() {
 			{isUploadDialogOpen && <UploadDialog onClose={() => setIsUploadDialogOpen(false)} onSubmit={handleUploadSubmit} />}
 
 			{/* 外部图源配置对话框 */}
-			{isExternalSourceOpen && <ExternalSourceDialog onClose={() => setIsExternalSourceOpen(false)} onSave={handleExternalSourceSave} />}
+			{isExternalSourceOpen && (
+				<ExternalSourceDialog
+					onClose={() => setIsExternalSourceOpen(false)}
+					onSave={handleExternalSourceSave}
+					onRefresh={handleRefreshIndex}
+					isRefreshing={isRefreshing}
+					checkedCount={checkedCount}
+					externalCount={externalPictures.length}
+				/>
+			)}
 		</>
 	)
 }

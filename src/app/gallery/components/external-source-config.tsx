@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { DialogModal } from '@/components/dialog-modal'
 import { toast } from 'sonner'
+import { Loader2, RefreshCw } from 'lucide-react'
 import externalSourceConfig from '../external-source.json'
 
 interface ExternalSourceConfig {
@@ -16,6 +17,10 @@ interface ExternalSourceConfig {
 interface ExternalSourceDialogProps {
 	onClose: () => void
 	onSave: (config: ExternalSourceConfig) => void
+	onRefresh?: () => Promise<void>
+	isRefreshing?: boolean
+	checkedCount?: number
+	externalCount?: number
 }
 
 /**
@@ -26,7 +31,14 @@ interface ExternalSourceDialogProps {
  * 2. 直接设置 URL 模板和范围，页面自动加载
  * 3. 可随时修改范围，实时生效
  */
-export default function ExternalSourceDialog({ onClose, onSave }: ExternalSourceDialogProps) {
+export default function ExternalSourceDialog({
+	onClose,
+	onSave,
+	onRefresh,
+	isRefreshing = false,
+	checkedCount = 0,
+	externalCount = 0
+}: ExternalSourceDialogProps) {
 	const [config, setConfig] = useState<ExternalSourceConfig>({
 		enabled: false,
 		urlTemplate: 'https://cloudflare-imgbed-9ut.pages.dev/file/{n}.webp',
@@ -50,7 +62,7 @@ export default function ExternalSourceDialog({ onClose, onSave }: ExternalSource
 			return
 		}
 		if (config.end - config.start > 500) {
-			toast.error('单次最多加载 500 张图片')
+			toast.error('单次最多加载 500 张 | 当前索引: ')
 			return
 		}
 		onSave(config)
@@ -140,13 +152,36 @@ export default function ExternalSourceDialog({ onClose, onSave }: ExternalSource
 
 						{/* 统计 */}
 						<div className='rounded-lg bg-gray-50 p-3 text-sm'>
-							<span className='text-secondary'>将加载 </span>
+							<span className='text-secondary'>范围: </span>
 							<span className='font-medium'>{config.end - config.start + 1}</span>
-							<span className='text-secondary'> 张图片</span>
+							<span className='text-secondary'> 张 | 当前索引: </span>
+							<span className='font-medium'>{externalCount}</span>
+							<span className='text-secondary'> 张 | 当前索引: </span>
 							{config.description && (
 								<span className='text-secondary'>，描述：{config.description}</span>
 							)}
 						</div>
+
+						{/* 刷新索引按钮 */}
+						{onRefresh && (
+							<button
+								onClick={onRefresh}
+								disabled={isRefreshing}
+								className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
+							>
+								{isRefreshing ? (
+									<>
+										<Loader2 className="h-4 w-4 animate-spin" />
+										<span>检测中... {checkedCount}</span>
+									</>
+								) : (
+									<>
+										<RefreshCw className="h-4 w-4" />
+										<span>刷新索引（检测图片存在性）</span>
+									</>
+								)}
+							</button>
+						)}
 					</>
 				)}
 
