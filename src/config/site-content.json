@@ -28,11 +28,15 @@
 			"url": "/images/art/cat.png"
 		},
 		{
+			"id": "person",
+			"url": "/images/art/Person.png"
+		},
+		{
 			"id": "a46372ff45bc5524",
 			"url": "/images/art/a46372ff45bc5524.jpg"
 		}
 	],
-	"currentArtImageId": "cat",
+	"currentArtImageId": "person",
 	"backgroundImages": [
 		{
 			"id": "",
