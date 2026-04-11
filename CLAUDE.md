@@ -37,6 +37,15 @@ pnpm deploy       # 部署到 Cloudflare
 - `src/config/card-styles.json` — 首页各卡片的位置偏移与启用状态
 - `src/config/card-styles-default.json` — 上述配置的默认值
 
+### Gallery 外部图源
+
+Gallery 支持直接从外部图床（如 Cloudflare R2）加载图片，无需下载到本地仓库：
+
+- `src/app/gallery/list.json` — 本地上传的图片列表
+- `src/app/gallery/external-source.json` — 外部图源配置（URL模板、编号范围等）
+- 外部图源图片通过 `fetch HEAD` 检测存在性，只加载实际存在的图片
+- 配置方式见 `docs/gallery-external-source.md`
+
 ### GitHub App 鉴权流程
 
 前端编辑功能通过 GitHub App 私钥在浏览器端完成鉴权，全程无服务器：
@@ -65,6 +74,7 @@ pnpm deploy       # 部署到 Cloudflare
 - `src/app/write/[slug]/` — 文章编辑器（需鉴权）
 - `src/app/write/` — 新建文章
 - `src/app/(home)/config-dialog/` — 首页配置面板（主题色、卡片开关、站点设置）
+- `src/app/gallery/` — 图片瀑布流，支持本地上传 + 外部图源（R2等）混合显示
 - 其他页面：`about`、`pictures`、`share`、`projects`、`bloggers`、`snippets`
 
 ### 各功能模块的写入服务
@@ -74,6 +84,8 @@ pnpm deploy       # 部署到 Cloudflare
 - `src/app/write/services/push-blog.ts` — 发布文章（同时更新 `index.json`）
 - `src/app/(home)/services/push-site-content.ts` — 保存站点配置
 - `src/app/pictures/services/push-pictures.ts` — 上传图片
+- `src/app/gallery/services/push-pictures.ts` — 保存本地图片列表到 `list.json`
+- `src/app/gallery/services/push-external-source.ts` — 保存外部图源配置到 `external-source.json`
 - 其他模块同理
 
 ### 全局状态管理
