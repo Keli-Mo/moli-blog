@@ -219,17 +219,22 @@ export default function GalleryPage() {
 		setIsChecking(false)
 
 		// 如果已登录，保存到 GitHub
+		console.log(`[Gallery] 保存索引: isAuth=${isAuth}`)
 		if (isAuth) {
 			try {
+				console.log(`[Gallery] 开始推送索引到 GitHub:`, newUrls)
 				const { pushExternalIndex } = await import('./services/push-external-index')
 				await pushExternalIndex(newUrls)
+				console.log(`[Gallery] 索引推送成功`)
 				toast.success(
 					`检测完成: 范围 ${start}-${end} 中找到 ${validUrlsInRange.length} 张图片，总计 ${newUrls.length} 张`
 				)
 			} catch (error) {
+				console.error(`[Gallery] 索引推送失败:`, error)
 				toast.error('保存索引失败，但页面已更新')
 			}
 		} else {
+			console.log(`[Gallery] 未登录，不保存索引`)
 			toast.success(
 				`检测完成: 范围 ${start}-${end} 中找到 ${validUrlsInRange.length} 张图片（未登录，索引未保存）`
 			)

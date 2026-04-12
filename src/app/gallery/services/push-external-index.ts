@@ -29,6 +29,7 @@ export async function pushExternalIndex(urls: string[]): Promise<void> {
 		}
 	]
 
+	console.log('[pushExternalIndex] Tree items:', treeItems)
 	const treeData = await createTree(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, treeItems, latestCommitSha)
 	const commitData = await createCommit(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, '更新外部图源索引', treeData.sha, [latestCommitSha])
 	await updateRef(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, `heads/${GITHUB_CONFIG.BRANCH}`, commitData.sha)
