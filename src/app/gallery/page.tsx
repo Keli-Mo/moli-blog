@@ -61,7 +61,8 @@ async function checkImageExists(url: string): Promise<boolean> {
 			pathname = '/api/exists' + pathname.slice('/file'.length)
 		}
 
-		const checkUrl = `${urlObj.origin}${pathname}`
+		// 添加时间戳绕过缓存
+		const checkUrl = `${urlObj.origin}${pathname}?_t=${Date.now()}`
 
 		const controller = new AbortController()
 		const timeoutId = setTimeout(() => controller.abort(), 5000)
