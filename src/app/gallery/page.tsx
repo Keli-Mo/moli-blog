@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { Loader2, RefreshCw } from 'lucide-react'
 import initialList from './list.json'
 import externalSourceConfig from './external-source.json'
-import externalIndex from './external-index.json'
 import { MasonicLayout } from './components/masonic-layout'
 import UploadDialog from './components/upload-dialog'
 import ExternalSourceDialog from './components/external-source-config'
@@ -17,6 +16,17 @@ import type { ImageItem } from '../projects/components/image-upload-dialog'
 import { useRouter } from 'next/navigation'
 import type { ExternalSourceConfig } from './components/external-source-config'
 import { loadExternalConfig, saveExternalConfig } from './lib/storage'
+
+// 动态获取外部索引，避免缓存问题
+async function fetchExternalIndex(): Promise<{ updatedAt: string; urls: string[] }> {
+	try {
+		const response = await fetch('/gallery/external-index.json?t=' + Date.now())
+		if (!response.ok) return { updatedAt: '', urls: [] }
+		return await response.json()
+	} catch {
+		return { updatedAt: '', urls: [] }
+	}
+}
 
 /**
  * Gallery Page - 图片瀑布流展示页面
@@ -34,16 +44,42 @@ export interface Picture {
 
 /**
  * 检测图片 URL 是否存在
- * 直接使用 Image 对象加载，不依赖 CORS
+ * 使用 fetch HEAD 请求检测，通过存在性检查 API 避免跨域问题
  */
-function checkImageExists(url: string): Promise<boolean> {
-	return new Promise(resolve => {
-		const img = new Image()
-		img.onload = () => resolve(true)
-		img.onerror = () => resolve(false)
-		img.src = url + (url.includes('?') ? '&' : '?') + '_check=' + Date.now()
-		setTimeout(() => resolve(false), 5000)
-	})
+async function checkImageExists(url: string): Promise<boolean> {
+	try {
+		// 解析文件路径，构建存在性检查 API URL
+		// 原始 URL: https://cloudflare-imgbed-9ut.pages.dev/file/1.webp
+		// 检查 URL: https://cloudflare-imgbed-9ut.pages.dev/api/exists/1.webp
+		const urlObj = new URL(url)
+		let pathname = urlObj.pathname
+
+		// 将 /file/ 开头的路径替换为 /api/exists/
+		if (pathname.startsWith('/file/')) {
+			pathname = '/api/exists' + pathname.slice('/file'.length)
+		}
+
+		const checkUrl = `${urlObj.origin}${pathname}`
+
+		// 使用 HEAD 请求检查文件是否存在
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+		const response = await fetch(checkUrl, {
+			method: 'HEAD',
+			mode: 'cors',
+			cache: 'no-cache',
+			signal: controller.signal
+		})
+
+		clearTimeout(timeoutId)
+
+		// 200 表示文件存在，404 表示不存在
+		return response.ok
+	} catch (error) {
+		// 网络错误或其他异常，视为不存在
+		return false
+	}
 }
 
 /**
@@ -103,17 +139,18 @@ export default function GalleryPage() {
 
 	/**
 	 * 从本地索引加载外部图源图片
+	 * 动态获取 external-index.json 以避免静态导入缓存
 	 */
-	const loadFromIndex = useCallback(() => {
+	const loadFromIndex = useCallback(async () => {
 		if (!externalConfig.enabled) {
 			setExternalPictures([])
 			return
 		}
 
-		// 优先使用本地索引文件中的 URL
-		const indexUrls = (externalIndex as { updatedAt: string; urls: string[] }).urls
-		if (indexUrls && indexUrls.length > 0) {
-			setExternalPictures(urlsToPictures(indexUrls, externalConfig.description))
+		// 动态获取索引文件，避免静态导入缓存
+		const indexData = await fetchExternalIndex()
+		if (indexData.urls.length > 0) {
+			setExternalPictures(urlsToPictures(indexData.urls, externalConfig.description))
 		} else {
 			// 索引为空时，生成 URL 但不检测（等待用户手动刷新）
 			const urls = generateUrlsFromConfig(externalConfig)
@@ -177,6 +214,19 @@ export default function GalleryPage() {
 	 */
 	useEffect(() => {
 		loadFromIndex()
+	}, [loadFromIndex])
+
+	/**
+	 * 页面重新获得焦点时刷新索引（检测文件更新）
+	 */
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				loadFromIndex()
+			}
+		}
+		document.addEventListener('visibilitychange', handleVisibilityChange)
+		return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
 	}, [loadFromIndex])
 
 	/**
