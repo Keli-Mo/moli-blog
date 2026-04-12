@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, ComponentType } from 'react'
+import { useMemo, useState, useEffect, ComponentType, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { Masonry } from 'masonic'
 import { Picture } from '../page'
@@ -21,6 +21,7 @@ interface MasonicLayoutProps {
 	isEditMode?: boolean
 	onDeleteSingle?: (pictureId: string, imageIndex: number | 'single') => void
 	onDeleteGroup?: (picture: Picture) => void
+	onImageError?: (url: string) => void
 }
 
 /**
@@ -74,6 +75,7 @@ function ImageLightbox({ url, description, onClose }: { url: string; description
  * ImageCard - 单个图片卡片组件
  * 用于瀑布流中显示单张图片及其描述
  * 在编辑模式下提供删除功能；非编辑模式下点击可放大
+ * 图片加载失败时自动隐藏
  */
 function ImageCard({
 	url,
@@ -91,12 +93,26 @@ function ImageCard({
 	isEditMode?: boolean
 	onDelete: () => void
 	onExpand: () => void
+	onImageError?: (url: string) => void
 }) {
+	const [isLoaded, setIsLoaded] = useState(false)
+	const [hasError, setHasError] = useState(false)
+
+	const handleError = useCallback(() => {
+		console.error(`[ImageCard] 图片加载失败: ${url}`)
+		setHasError(true)
+		onImageError?.(url)
+	}, [url, onImageError])
+
+	// 加载失败时不渲染
+	if (hasError) {
+		return null
+	}
+
 	return (
 		<motion.div
 			initial={{ opacity: 0, scale: 0.95 }}
-			animate={{ opacity: 1, scale: 1 }}
-			exit={{ opacity: 0, scale: 0.95 }}
+			animate={{ opacity: isLoaded ? 1 : 0, scale: isLoaded ? 1 : 0.95 }}
 			className='group relative overflow-hidden rounded-lg bg-gray-100'>
 			{/* 非编辑模式下点击放大 */}
 			<img
@@ -104,10 +120,20 @@ function ImageCard({
 				alt={description || '图片'}
 				className={`w-full h-auto object-cover ${!isEditMode ? 'cursor-zoom-in' : ''}`}
 				onClick={!isEditMode ? onExpand : undefined}
+				onLoad={() => setIsLoaded(true)}
+				onError={handleError}
+				loading="lazy"
 			/>
 
+			{/* 加载中占位 */}
+			{!isLoaded && !hasError && (
+				<div className='absolute inset-0 flex items-center justify-center bg-gray-100'>
+					<div className='h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600'></div>
+				</div>
+			)}
+
 			{/* 图片描述叠加层 - hover 时才显示 */}
-			{description && (
+			{description && isLoaded && (
 				<div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
 					<p className='text-white text-sm line-clamp-2'>{description}</p>
 				</div>
@@ -133,7 +159,7 @@ function ImageCard({
  * 使用 masonic 库实现响应式网格布局
  * 支持 3 列布局、间距 16px、响应式调整
  */
-export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGroup }: MasonicLayoutProps) {
+export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGroup, onImageError }: MasonicLayoutProps) {
 	const [isClient, setIsClient] = useState(false)
 	// 当前放大展示的图片信息
 	const [lightbox, setLightbox] = useState<{ url: string; description?: string } | null>(null)
@@ -193,6 +219,7 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 						isEditMode={isEditMode}
 						onDelete={() => onDeleteSingle?.(item.pictureId, item.imageIndex)}
 						onExpand={() => setLightbox({ url: item.url, description: item.description })}
+						onImageError={onImageError}
 					/>
 				)}
 			/>

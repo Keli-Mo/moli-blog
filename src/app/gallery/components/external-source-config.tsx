@@ -1,208 +1,211 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DialogModal } from '@/components/dialog-modal'
-import { toast } from 'sonner'
-import { Loader2, RefreshCw } from 'lucide-react'
-import externalSourceConfig from '../external-source.json'
+import { motion } from 'motion/react'
+import { X, RefreshCw, Info } from 'lucide-react'
 
-interface ExternalSourceConfig {
-	enabled: boolean
-	urlTemplate: string
-	start: number
-	end: number
-	description: string
-}
-
-interface ExternalSourceDialogProps {
+export interface ExternalSourceDialogProps {
 	onClose: () => void
-	onSave: (config: ExternalSourceConfig) => void
-	onRefresh?: () => Promise<void>
-	isRefreshing?: boolean
-	checkedCount?: number
-	externalCount?: number
+	onCheckRange: (start: number, end: number, urlTemplate: string) => Promise<void>
+	isChecking: boolean
+	checkProgress: { current: number; total: number }
+	currentUrls: string[]
 }
 
-/**
- * 外部图源配置对话框 - 极简配置 R2 图片源
- *
- * 设计原则：
- * 1. 配置即生效，无需"导入"步骤
- * 2. 直接设置 URL 模板和范围，页面自动加载
- * 3. 可随时修改范围，实时生效
- */
 export default function ExternalSourceDialog({
 	onClose,
-	onSave,
-	onRefresh,
-	isRefreshing = false,
-	checkedCount = 0,
-	externalCount = 0
+	onCheckRange,
+	isChecking,
+	checkProgress,
+	currentUrls
 }: ExternalSourceDialogProps) {
-	const [config, setConfig] = useState<ExternalSourceConfig>({
-		enabled: false,
-		urlTemplate: 'https://cloudflare-imgbed-9ut.pages.dev/file/{n}.webp',
-		start: 1,
-		end: 50,
-		description: ''
-	})
+	// 基础配置
+	const [urlTemplate, setUrlTemplate] = useState('https://cloudflare-imgbed-9ut.pages.dev/file/{n}.webp')
+	const [start, setStart] = useState(1)
+	const [end, setEnd] = useState(50)
 
-	// 加载现有配置
+	// 已存在的编号范围提示
+	const [existingRanges, setExistingRanges] = useState<string>('')
+
+	// 加载本地存储的配置
 	useEffect(() => {
-		setConfig(externalSourceConfig as ExternalSourceConfig)
+		try {
+			const saved = localStorage.getItem('gallery-external-config')
+			if (saved) {
+				const config = JSON.parse(saved)
+				if (config.urlTemplate) setUrlTemplate(config.urlTemplate)
+			}
+		} catch {
+			// 忽略错误
+		}
 	}, [])
 
-	const handleSave = () => {
-		if (config.enabled && !config.urlTemplate.includes('{n}')) {
-			toast.error('URL 模板必须包含 {n} 占位符')
+	// 分析当前已有的图片编号范围
+	useEffect(() => {
+		if (currentUrls.length === 0) {
+			setExistingRanges('暂无索引')
 			return
 		}
-		if (config.start > config.end) {
-			toast.error('起始数字不能大于结束数字')
+
+		const numbers: number[] = []
+		currentUrls.forEach(url => {
+			const match = url.match(/(\d+)\.webp$/)
+			if (match) {
+				numbers.push(parseInt(match[1], 10))
+			}
+		})
+
+		if (numbers.length === 0) {
+			setExistingRanges('暂无有效索引')
 			return
 		}
-		if (config.end - config.start > 500) {
-			toast.error('单次最多加载 500 张 | 当前索引: ')
-			return
+
+		numbers.sort((a, b) => a - b)
+		const min = numbers[0]
+		const max = numbers[numbers.length - 1]
+		setExistingRanges(`${min} - ${max} （共 ${numbers.length} 张）`)
+
+		// 默认检测范围设为已有范围或 1-50
+		setStart(min)
+		setEnd(max)
+	}, [currentUrls])
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (isChecking) return
+
+		// 保存配置到本地存储
+		try {
+			localStorage.setItem('gallery-external-config', JSON.stringify({ urlTemplate }))
+		} catch {
+			// 忽略错误
 		}
-		onSave(config)
-		onClose()
+
+		await onCheckRange(start, end, urlTemplate)
 	}
 
-	// 生成预览 URL
-	const previewUrl = config.urlTemplate.replace('{n}', String(config.start))
-
 	return (
-		<DialogModal open onClose={onClose} className='card w-md max-sm:w-full'>
-			<div className='space-y-4 p-6'>
-				<div>
-					<h2 className='text-lg font-bold'>外部图源配置</h2>
-					<p className='text-secondary mt-1 text-sm'>直接配置 R2 图片源，无需导入即可显示</p>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
+			<motion.div
+				initial={{ opacity: 0, scale: 0.95 }}
+				animate={{ opacity: 1, scale: 1 }}
+				className='relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl'
+			>
+				{/* 关闭按钮 */}
+				<button
+					onClick={onClose}
+					disabled={isChecking}
+					className='absolute top-4 right-4 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50'
+				>
+					<X className='h-5 w-5' />
+				</button>
+
+				<h2 className='mb-4 text-lg font-semibold'>更新外部图源索引</h2>
+
+				{/* 当前索引信息 */}
+				<div className='mb-6 rounded-lg bg-blue-50 p-3 text-sm text-blue-700'>
+					<div className='flex items-start gap-2'>
+						<Info className='mt-0.5 h-4 w-4 flex-shrink-0' />
+						<div>
+							<p className='font-medium'>当前索引范围</p>
+							<p>{existingRanges}</p>
+						</div>
+					</div>
 				</div>
 
-				{/* 开关 */}
-				<div className='flex items-center justify-between rounded-lg border border-gray-200 p-3'>
-					<span className='text-sm font-medium'>启用外部图源</span>
-					<button
-						onClick={() => setConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-						className={`relative h-6 w-11 rounded-full transition-colors ${
-							config.enabled ? 'bg-blue-600' : 'bg-gray-200'
-						}`}
-					>
-						<span
-							className={`absolute top-1 left-1 h-4 w-4 rounded-full bg-white transition-transform ${
-								config.enabled ? 'translate-x-5' : 'translate-x-0'
-							}`}
+				<form onSubmit={handleSubmit} className='space-y-4'>
+					{/* URL 模板 */}
+					<div>
+						<label className='mb-1 block text-sm font-medium text-gray-700'>
+							URL 模板
+						</label>
+						<input
+							type='text'
+							value={urlTemplate}
+							onChange={e => setUrlTemplate(e.target.value)}
+							disabled={isChecking}
+							placeholder='https://example.com/file/{n}.webp'
+							className='w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100'
 						/>
-					</button>
-				</div>
+						<p className='mt-1 text-xs text-gray-500'>使用 {'{n}'} 作为编号占位符</p>
+					</div>
 
-				{config.enabled && (
-					<>
-						{/* URL 模板 */}
-						<div>
-							<label className='mb-2 block text-sm font-medium'>
-								URL 模板 <span className='text-secondary text-xs'>({'{n}'} 表示数字)</span>
-							</label>
+					{/* 检测范围 */}
+					<div>
+						<label className='mb-1 block text-sm font-medium text-gray-700'>
+							检测范围
+						</label>
+						<div className='flex items-center gap-3'>
 							<input
-								type='text'
-								value={config.urlTemplate}
-								onChange={e => setConfig(prev => ({ ...prev, urlTemplate: e.target.value }))}
-								className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
+								type='number'
+								value={start}
+								onChange={e => setStart(Math.max(1, parseInt(e.target.value) || 1))}
+								disabled={isChecking}
+								min={1}
+								className='w-24 rounded-lg border border-gray-300 px-3 py-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100'
 							/>
-							<p className='text-secondary mt-1 text-xs'>预览：{previewUrl}</p>
-						</div>
-
-						{/* 范围 */}
-						<div className='flex items-center gap-4'>
-							<div className='flex-1'>
-								<label className='mb-2 block text-sm font-medium'>起始</label>
-								<input
-									type='number'
-									min={1}
-									value={config.start}
-									onChange={e => setConfig(prev => ({ ...prev, start: Number(e.target.value) }))}
-									className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
-								/>
-							</div>
-							<div className='text-secondary pt-6'>~</div>
-							<div className='flex-1'>
-								<label className='mb-2 block text-sm font-medium'>结束</label>
-								<input
-									type='number'
-									min={config.start}
-									value={config.end}
-									onChange={e => setConfig(prev => ({ ...prev, end: Number(e.target.value) }))}
-									className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
-								/>
-							</div>
-						</div>
-
-						{/* 描述 */}
-						<div>
-							<label className='mb-2 block text-sm font-medium'>统一描述（可选）</label>
+							<span className='text-gray-500'>-</span>
 							<input
-								type='text'
-								value={config.description}
-								onChange={e => setConfig(prev => ({ ...prev, description: e.target.value }))}
-								placeholder='这组图片的说明...'
-								className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
+								type='number'
+								value={end}
+								onChange={e => setEnd(Math.max(start, parseInt(e.target.value) || start))}
+								disabled={isChecking}
+								min={start}
+								className='w-24 rounded-lg border border-gray-300 px-3 py-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100'
 							/>
 						</div>
+						<p className='mt-1 text-xs text-gray-500'>
+							只会检测该范围内的图片，已存在但不在范围内的图片会被保留
+						</p>
+					</div>
 
-						{/* 统计 */}
-						<div className='rounded-lg bg-gray-50 p-3 text-sm'>
-							<span className='text-secondary'>范围: </span>
-							<span className='font-medium'>{config.end - config.start + 1}</span>
-							<span className='text-secondary'> 张 | 当前索引: </span>
-							<span className='font-medium'>{externalCount}</span>
-							<span className='text-secondary'> 张 | 当前索引: </span>
-							{config.description && (
-								<span className='text-secondary'>，描述：{config.description}</span>
+					{/* 进度条 */}
+					{isChecking && (
+						<div className='rounded-lg bg-gray-50 p-3'>
+							<div className='mb-2 flex items-center justify-between text-sm'>
+								<span className='text-gray-600'>检测进度</span>
+								<span className='font-medium text-gray-900'>
+									{checkProgress.current} / {checkProgress.total}
+								</span>
+							</div>
+							<div className='h-2 overflow-hidden rounded-full bg-gray-200'>
+								<div
+									className='h-full bg-blue-500 transition-all duration-300'
+									style={{
+										width: `${checkProgress.total > 0 ? (checkProgress.current / checkProgress.total) * 100 : 0}%`
+									}}
+								/>
+							</div>
+						</div>
+					)}
+
+					{/* 按钮 */}
+					<div className='flex gap-3 pt-2'>
+						<button
+							type='button'
+							onClick={onClose}
+							disabled={isChecking}
+							className='flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50'
+						>
+							取消
+						</button>
+						<button
+							type='submit'
+							disabled={isChecking || !urlTemplate.includes('{n}')}
+							className='flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50'
+						>
+							{isChecking ? (
+								<span className='flex items-center justify-center gap-2'>
+									<RefreshCw className='h-4 w-4 animate-spin' />
+									检测中...
+								</span>
+							) : (
+								'开始检测'
 							)}
-						</div>
-
-						{/* 刷新索引按钮 */}
-						{onRefresh && (
-							<button
-								onClick={onRefresh}
-								disabled={isRefreshing}
-								className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400"
-							>
-								{isRefreshing ? (
-									<>
-										<Loader2 className="h-4 w-4 animate-spin" />
-										<span>检测中... {checkedCount}</span>
-									</>
-								) : (
-									<>
-										<RefreshCw className="h-4 w-4" />
-										<span>刷新索引（检测图片存在性）</span>
-									</>
-								)}
-							</button>
-						)}
-					</>
-				)}
-
-				{/* 按钮 */}
-				<div className='flex justify-end gap-3 pt-2'>
-					<button
-						onClick={onClose}
-						className='rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm transition-colors hover:bg-gray-50'
-					>
-						取消
-					</button>
-					<button
-						onClick={handleSave}
-						className='rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700'
-					>
-						保存
-					</button>
-				</div>
-			</div>
-		</DialogModal>
+						</button>
+					</div>
+				</form>
+			</motion.div>
+		</div>
 	)
 }
-
-export type { ExternalSourceConfig }

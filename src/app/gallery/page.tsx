@@ -3,9 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
-import { Loader2, RefreshCw } from 'lucide-react'
 import initialList from './list.json'
-import externalSourceConfig from './external-source.json'
 import { MasonicLayout } from './components/masonic-layout'
 import UploadDialog from './components/upload-dialog'
 import ExternalSourceDialog from './components/external-source-config'
@@ -14,24 +12,15 @@ import { useAuthStore } from '@/hooks/use-auth'
 import { useConfigStore } from '@/app/(home)/stores/config-store'
 import type { ImageItem } from '../projects/components/image-upload-dialog'
 import { useRouter } from 'next/navigation'
-import type { ExternalSourceConfig } from './components/external-source-config'
-import { loadExternalConfig, saveExternalConfig } from './lib/storage'
-
-// 动态获取外部索引，避免缓存问题
-async function fetchExternalIndex(): Promise<{ updatedAt: string; urls: string[] }> {
-	try {
-		const response = await fetch('/gallery/external-index.json?t=' + Date.now())
-		if (!response.ok) return { updatedAt: '', urls: [] }
-		return await response.json()
-	} catch {
-		return { updatedAt: '', urls: [] }
-	}
-}
 
 /**
  * Gallery Page - 图片瀑布流展示页面
  * 支持本地图片（list.json）+ 外部图源（R2等）混合显示
- * 外部图源使用本地索引文件（external-index.json），无需每次检测
+ *
+ * 工作流程：
+ * 1. 进入页面时，只读取 external-index.json 中已有的索引，不检测远端
+ * 2. 点击更新按钮时，输入范围 n-m，只检测该范围内的图片
+ * 3. 检测完成后，更新 external-index.json（添加存在的，移除不存在的）
  */
 
 export interface Picture {
@@ -42,15 +31,28 @@ export interface Picture {
 	images?: string[]
 }
 
+interface ExternalIndex {
+	updatedAt: string
+	urls: string[]
+}
+
 /**
- * 检测图片 URL 是否存在
- * 使用 fetch HEAD 请求检测，通过存在性检查 API 避免跨域问题
+ * 将 URL 列表转换为 Picture 对象
+ */
+function urlsToPictures(urls: string[]): Picture[] {
+	return urls.map((url, index) => ({
+		id: `external-${index}`,
+		uploadedAt: new Date().toISOString(),
+		images: [url]
+	}))
+}
+
+/**
+ * 检测单个图片是否存在
+ * 使用 fetch HEAD 请求检测
  */
 async function checkImageExists(url: string): Promise<boolean> {
 	try {
-		// 解析文件路径，构建存在性检查 API URL
-		// 原始 URL: https://cloudflare-imgbed-9ut.pages.dev/file/1.webp
-		// 检查 URL: https://cloudflare-imgbed-9ut.pages.dev/api/exists/1.webp
 		const urlObj = new URL(url)
 		let pathname = urlObj.pathname
 
@@ -61,7 +63,6 @@ async function checkImageExists(url: string): Promise<boolean> {
 
 		const checkUrl = `${urlObj.origin}${pathname}`
 
-		// 使用 HEAD 请求检查文件是否存在
 		const controller = new AbortController()
 		const timeoutId = setTimeout(() => controller.abort(), 5000)
 
@@ -74,48 +75,13 @@ async function checkImageExists(url: string): Promise<boolean> {
 
 		clearTimeout(timeoutId)
 
-		// 200 表示文件存在，404 表示不存在
-		return response.ok
-	} catch (error) {
-		// 网络错误或其他异常，视为不存在
+		const exists = response.ok
+		console.log(`[checkImageExists] ${url} -> status:${response.status}, exists:${exists}`)
+		return exists
+	} catch (err) {
+		console.log(`[checkImageExists] ${url} -> error:`, err)
 		return false
 	}
-}
-
-/**
- * 从配置生成 URL 列表
- */
-function generateUrlsFromConfig(config: ExternalSourceConfig): string[] {
-	if (!config.enabled || !config.urlTemplate.includes('{n}')) {
-		return []
-	}
-	const urls: string[] = []
-	for (let i = config.start; i <= config.end; i++) {
-		urls.push(config.urlTemplate.replace('{n}', String(i)))
-	}
-	return urls
-}
-
-/**
- * 将 URL 列表转换为 Picture 对象
- */
-function urlsToPictures(urls: string[], description?: string): Picture[] {
-	const now = new Date().toISOString()
-	return urls.map((url, index) => ({
-		id: `external-${index}`,
-		uploadedAt: now,
-		description: description || undefined,
-		images: [url]
-	}))
-}
-
-/**
- * 合并默认配置和本地存储配置
- */
-function getInitialConfig(): ExternalSourceConfig {
-	const defaultConfig = { ...(externalSourceConfig as ExternalSourceConfig), enabled: true }
-	const saved = loadExternalConfig()
-	return saved || defaultConfig
 }
 
 export default function GalleryPage() {
@@ -125,10 +91,15 @@ export default function GalleryPage() {
 	const [isSaving, setIsSaving] = useState(false)
 	const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
 	const [isExternalSourceOpen, setIsExternalSourceOpen] = useState(false)
-	const [externalConfig, setExternalConfig] = useState<ExternalSourceConfig>(getInitialConfig())
+
+	// 外部图源状态
 	const [externalPictures, setExternalPictures] = useState<Picture[]>([])
-	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [checkedCount, setCheckedCount] = useState(0)
+	const [externalUrls, setExternalUrls] = useState<string[]>([])
+
+	// 检测状态
+	const [isChecking, setIsChecking] = useState(false)
+	const [checkProgress, setCheckProgress] = useState({ current: 0, total: 0 })
+
 	const [imageItems, setImageItems] = useState<Map<string, ImageItem>>(new Map())
 	const keyInputRef = useRef<HTMLInputElement>(null)
 	const router = useRouter()
@@ -138,101 +109,165 @@ export default function GalleryPage() {
 	const hideEditButton = siteContent.hideEditButton ?? false
 
 	/**
-	 * 从本地索引加载外部图源图片
-	 * 动态获取 external-index.json 以避免静态导入缓存
+	 * 加载外部图源索引（只读本地索引，不检测远端）
 	 */
-	const loadFromIndex = useCallback(async () => {
-		if (!externalConfig.enabled) {
+	const loadExternalIndex = useCallback(async () => {
+		try {
+			// 添加时间戳和缓存控制头，防止浏览器缓存
+			const response = await fetch(`/gallery/external-index.json?_t=${Date.now()}`, {
+				cache: 'no-store',
+				headers: {
+					'Cache-Control': 'no-cache, no-store, must-revalidate',
+					'Pragma': 'no-cache'
+				}
+			})
+			if (!response.ok) {
+				console.log('[Gallery] 索引文件不存在或加载失败，清空外部图片')
+				setExternalPictures([])
+				setExternalUrls([])
+				return
+			}
+			const data: ExternalIndex = await response.json()
+			const urls = (data.urls || []).filter(url => url && url.trim() !== '')
+			console.log(`[Gallery] 加载索引成功: ${urls.length} 张图片`, urls)
+			setExternalUrls(urls)
+			setExternalPictures(urlsToPictures(urls))
+		} catch (err) {
+			console.error('[Gallery] 加载索引失败:', err)
 			setExternalPictures([])
-			return
+			setExternalUrls([])
 		}
-
-		// 动态获取索引文件，避免静态导入缓存
-		const indexData = await fetchExternalIndex()
-		if (indexData.urls.length > 0) {
-			setExternalPictures(urlsToPictures(indexData.urls, externalConfig.description))
-		} else {
-			// 索引为空时，生成 URL 但不检测（等待用户手动刷新）
-			const urls = generateUrlsFromConfig(externalConfig)
-			setExternalPictures(urlsToPictures(urls, externalConfig.description))
-		}
-	}, [externalConfig])
+	}, [])
 
 	/**
-	 * 手动刷新 - 检测所有图片并更新索引
+	 * 初始加载 - 只读取索引，不检测
+	 * 先清空状态，避免显示缓存数据
 	 */
-	const handleRefreshIndex = useCallback(async () => {
-		if (!externalConfig.enabled || !externalConfig.urlTemplate.includes('{n}')) {
-			toast.error('请先启用外部图源并配置 URL 模板')
-			return
+	useEffect(() => {
+		// 强制清空，避免浏览器缓存影响
+		setExternalPictures([])
+		setExternalUrls([])
+		// 延迟加载，确保状态已清空
+		const timer = setTimeout(() => {
+			loadExternalIndex()
+		}, 100)
+		return () => clearTimeout(timer)
+	}, [loadExternalIndex])
+
+	/**
+	 * 检测指定范围的图片并更新索引
+	 * 只检测 n-m 范围，存在则添加/保留，不存在则移除
+	 */
+	const handleCheckRange = useCallback(async (start: number, end: number, urlTemplate: string) => {
+		if (isChecking) return
+
+		setIsChecking(true)
+		setCheckProgress({ current: 0, total: end - start + 1 })
+
+		// 构建检测范围内的 URL 列表
+		const urlsToCheck: string[] = []
+		for (let i = start; i <= end; i++) {
+			urlsToCheck.push(urlTemplate.replace('{n}', String(i)))
 		}
 
-		setIsRefreshing(true)
-		setCheckedCount(0)
-
-		const urls = generateUrlsFromConfig(externalConfig)
-		const validUrls: string[] = []
+		// 批量检测（每批5个，避免并发过多）
 		const batchSize = 5
+		const validUrlsInRange: string[] = []
 
-		// 批量检测
-		for (let i = 0; i < urls.length; i += batchSize) {
-			const batch = urls.slice(i, i + batchSize)
+		for (let i = 0; i < urlsToCheck.length; i += batchSize) {
+			const batch = urlsToCheck.slice(i, i + batchSize)
 			const results = await Promise.all(
 				batch.map(async url => {
+					console.log(`[Gallery] 检测中: ${url}`)
 					const exists = await checkImageExists(url)
+					console.log(`[Gallery] 检测结果: ${url} -> ${exists ? '✓ 存在' : '✗ 不存在'}`)
 					return { url, exists }
 				})
 			)
 
 			results.forEach(({ url, exists }) => {
-				if (exists) validUrls.push(url)
+				if (exists) {
+					validUrlsInRange.push(url)
+				}
 			})
 
-			setCheckedCount(Math.min(i + batchSize, urls.length))
+			setCheckProgress({
+				current: Math.min(i + batchSize, urlsToCheck.length),
+				total: urlsToCheck.length
+			})
 		}
 
-		// 更新显示
-		setExternalPictures(urlsToPictures(validUrls, externalConfig.description))
-		setIsRefreshing(false)
+		// 合并索引：保留范围外的原有 URL + 范围内检测有效的 URL
+		const urlsOutsideRange = externalUrls.filter(url => {
+			// 从 URL 中提取编号
+			const match = url.match(/(\d+)\.webp$/)
+			if (!match) return true // 无法解析的保留
+			const num = parseInt(match[1], 10)
+			return num < start || num > end // 保留范围外的
+		})
 
-		// 保存到索引文件（如果已登录）
+		// 新的 URL 列表 = 范围外的原有 + 范围内检测有效的
+		const newUrls = [...urlsOutsideRange, ...validUrlsInRange]
+
+		console.log(`[Gallery] 检测完成: 范围${start}-${end}, 有效${validUrlsInRange.length}张`, validUrlsInRange)
+		console.log(`[Gallery] 范围外保留: ${urlsOutsideRange.length}张`, urlsOutsideRange)
+		console.log(`[Gallery] 新的索引: ${newUrls.length}张`, newUrls)
+
+		// 按编号排序
+		newUrls.sort((a, b) => {
+			const matchA = a.match(/(\d+)\.webp$/)
+			const matchB = b.match(/(\d+)\.webp$/)
+			if (!matchA || !matchB) return 0
+			return parseInt(matchA[1], 10) - parseInt(matchB[1], 10)
+		})
+
+		// 更新本地状态（不刷新页面）
+		setExternalUrls(newUrls)
+		setExternalPictures(urlsToPictures(newUrls))
+		setIsChecking(false)
+
+		// 如果已登录，保存到 GitHub
 		if (isAuth) {
 			try {
 				const { pushExternalIndex } = await import('./services/push-external-index')
-				await pushExternalIndex(validUrls)
-				toast.success(`已更新索引: ${validUrls.length}/${urls.length} 张图片`)
+				await pushExternalIndex(newUrls)
+				toast.success(
+					`检测完成: 范围 ${start}-${end} 中找到 ${validUrlsInRange.length} 张图片，总计 ${newUrls.length} 张`
+				)
 			} catch (error) {
-				toast.error('保存索引失败，但当前页面已更新')
+				toast.error('保存索引失败，但页面已更新')
 			}
 		} else {
-			toast.success(`检测完成: ${validUrls.length}/${urls.length} 张图片（未登录，索引未保存）`)
+			toast.success(
+				`检测完成: 范围 ${start}-${end} 中找到 ${validUrlsInRange.length} 张图片（未登录，索引未保存）`
+			)
 		}
-	}, [externalConfig, isAuth])
-
-	/**
-	 * 初始加载和配置变更时重新加载
-	 */
-	useEffect(() => {
-		loadFromIndex()
-	}, [loadFromIndex])
-
-	/**
-	 * 页面重新获得焦点时刷新索引（检测文件更新）
-	 */
-	useEffect(() => {
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				loadFromIndex()
-			}
-		}
-		document.addEventListener('visibilitychange', handleVisibilityChange)
-		return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-	}, [loadFromIndex])
+	}, [externalUrls, isAuth, isChecking])
 
 	/**
 	 * 合并本地图片和外部图源图片
 	 */
 	const allPictures = [...externalPictures, ...localPictures]
+
+	// 调试信息
+	console.log('[Gallery] 外部图片:', externalPictures.length, '本地图片:', localPictures.length)
+
+	/**
+	 * 处理外部图片加载失败
+	 * 从当前显示中移除加载失败的图片（但不修改索引文件）
+	 */
+	const handleImageError = useCallback((url: string) => {
+		console.error(`[Gallery] 图片加载失败，从显示中移除: ${url}`)
+		// 只处理外部图源的图片
+		if (!url.includes('cloudflare-imgbed')) return
+
+		setExternalPictures(prev => {
+			const filtered = prev.filter(p => !p.images?.includes(url))
+			console.log(`[Gallery] 移除前: ${prev.length}, 移除后: ${filtered.length}`)
+			return filtered
+		})
+		setExternalUrls(prev => prev.filter(u => u !== url))
+	}, [])
 
 	/**
 	 * 处理上传提交
@@ -271,29 +306,11 @@ export default function GalleryPage() {
 	}
 
 	/**
-	 * 处理外部图源配置更新
-	 */
-	const handleExternalSourceSave = async (config: ExternalSourceConfig) => {
-		setExternalConfig(config)
-		saveExternalConfig(config)
-		toast.success('外部图源配置已更新')
-
-		if (isAuth) {
-			try {
-				const { pushExternalSourceConfig } = await import('./services/push-external-source')
-				await pushExternalSourceConfig(config)
-			} catch {
-				// 静默失败
-			}
-		}
-	}
-
-	/**
 	 * 删除单个图片
 	 */
 	const handleDeleteSingleImage = (pictureId: string, imageIndex: number | 'single') => {
 		if (pictureId.startsWith('external-')) {
-			toast.info('外部图源的图片需在配置中调整范围')
+			toast.info('外部图源的图片需在更新索引时移除')
 			return
 		}
 
@@ -321,43 +338,6 @@ export default function GalleryPage() {
 				})
 				.filter((p): p is Picture => p !== null)
 		})
-
-		setImageItems(prev => {
-			const next = new Map(prev)
-			if (imageIndex === 'single') {
-				for (const key of next.keys()) {
-					if (key.startsWith(`${pictureId}::`)) {
-						next.delete(key)
-					}
-				}
-			} else {
-				next.delete(`${pictureId}::${imageIndex}`)
-
-				const keysToUpdate: Array<{ oldKey: string; newKey: string }> = []
-				for (const key of next.keys()) {
-					if (key.startsWith(`${pictureId}::`)) {
-						const [, indexStr] = key.split('::')
-						const oldIndex = Number(indexStr)
-						if (!isNaN(oldIndex) && oldIndex > imageIndex) {
-							const newIndex = oldIndex - 1
-							keysToUpdate.push({
-								oldKey: key,
-								newKey: `${pictureId}::${newIndex}`
-							})
-						}
-					}
-				}
-
-				for (const { oldKey, newKey } of keysToUpdate) {
-					const value = next.get(oldKey)
-					if (value) {
-						next.set(newKey, value)
-						next.delete(oldKey)
-					}
-				}
-			}
-			return next
-		})
 	}
 
 	/**
@@ -365,22 +345,13 @@ export default function GalleryPage() {
 	 */
 	const handleDeleteGroup = (picture: Picture) => {
 		if (picture.id.startsWith('external-')) {
-			toast.info('外部图源的图片需在配置中调整范围')
+			toast.info('外部图源的图片需在更新索引时移除')
 			return
 		}
 
 		if (!confirm('确定要删除这一组图片吗？')) return
 
 		setLocalPictures(prev => prev.filter(p => p.id !== picture.id))
-		setImageItems(prev => {
-			const next = new Map(prev)
-			for (const key of next.keys()) {
-				if (key.startsWith(`${picture.id}::`)) {
-					next.delete(key)
-				}
-			}
-			return next
-		})
 	}
 
 	const handleChoosePrivateKey = async (file: File) => {
@@ -428,7 +399,6 @@ export default function GalleryPage() {
 
 	const handleCancel = () => {
 		setLocalPictures(originalPictures)
-		setExternalConfig(getInitialConfig())
 		setImageItems(new Map())
 		setIsEditMode(false)
 	}
@@ -469,6 +439,7 @@ export default function GalleryPage() {
 				isEditMode={isEditMode}
 				onDeleteSingle={handleDeleteSingleImage}
 				onDeleteGroup={handleDeleteGroup}
+				onImageError={handleImageError}
 			/>
 
 			{/* 空状态提示 */}
@@ -494,11 +465,11 @@ export default function GalleryPage() {
 							whileTap={{ scale: 0.95 }}
 							onClick={() => setIsExternalSourceOpen(true)}
 							className={`rounded-xl border px-4 py-2 text-sm ${
-								externalConfig.enabled
+								externalUrls.length > 0
 									? 'bg-green-50 text-green-700'
 									: 'bg-purple-50 text-purple-700'
 							}`}>
-							{externalConfig.enabled ? '外部图源 ✓' : '外部图源'}
+							{externalUrls.length > 0 ? `外部图源 (${externalUrls.length})` : '外部图源'}
 						</motion.button>
 						<motion.button
 							whileHover={{ scale: 1.05 }}
@@ -540,15 +511,14 @@ export default function GalleryPage() {
 			{/* 上传对话框 */}
 			{isUploadDialogOpen && <UploadDialog onClose={() => setIsUploadDialogOpen(false)} onSubmit={handleUploadSubmit} />}
 
-			{/* 外部图源配置对话框 */}
+			{/* 外部图源更新对话框 */}
 			{isExternalSourceOpen && (
 				<ExternalSourceDialog
 					onClose={() => setIsExternalSourceOpen(false)}
-					onSave={handleExternalSourceSave}
-					onRefresh={handleRefreshIndex}
-					isRefreshing={isRefreshing}
-					checkedCount={checkedCount}
-					externalCount={externalPictures.length}
+					onCheckRange={handleCheckRange}
+					isChecking={isChecking}
+					checkProgress={checkProgress}
+					currentUrls={externalUrls}
 				/>
 			)}
 		</>
