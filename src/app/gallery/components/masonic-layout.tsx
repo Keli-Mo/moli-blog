@@ -186,6 +186,20 @@ export function MasonicLayout({ pictures, isEditMode, onDeleteSingle, onDeleteGr
 		})
 	}, [pictures])
 
+	/**
+	 * 预加载图片 - 提前加载可视区域前后的图片，减少滚动时的加载延迟
+	 */
+	useEffect(() => {
+		// 预加载前20张图片（首屏 + 即将进入视口）
+		const preloadCount = Math.min(20, items.length)
+		const imagesToPreload = items.slice(0, preloadCount)
+
+		imagesToPreload.forEach(item => {
+			const img = new Image()
+			img.src = item.url
+		})
+	}, [items])
+
 	// 直接使用 items.length 作为 key，确保每次长度变化都重新挂载 Masonry
 	// 避免 masonic 内部缓存与新的 items 长度不一致导致报错
 	const masonryKey = items.length
