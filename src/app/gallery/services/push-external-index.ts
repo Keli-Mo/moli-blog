@@ -22,7 +22,7 @@ export async function pushExternalIndex(urls: string[]): Promise<void> {
 
 	const treeItems: TreeItem[] = [
 		{
-			path: 'src/app/gallery/external-index.json',
+			path: 'public/gallery/external-index.json',
 			mode: '100644',
 			type: 'blob',
 			sha: blobData.sha
