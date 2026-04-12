@@ -141,17 +141,9 @@ export default function GalleryPage() {
 
 	/**
 	 * 初始加载 - 只读取索引，不检测
-	 * 先清空状态，避免显示缓存数据
 	 */
 	useEffect(() => {
-		// 强制清空，避免浏览器缓存影响
-		setExternalPictures([])
-		setExternalUrls([])
-		// 延迟加载，确保状态已清空
-		const timer = setTimeout(() => {
-			loadExternalIndex()
-		}, 100)
-		return () => clearTimeout(timer)
+		loadExternalIndex()
 	}, [loadExternalIndex])
 
 	/**
