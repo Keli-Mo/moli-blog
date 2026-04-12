@@ -109,8 +109,8 @@
 		"width": 180,
 		"height": 120,
 		"order": 9,
-		"offsetX": null,
-		"offsetY": null,
+		"offsetX": 211,
+		"offsetY": 3,
 		"enabled": true
 	},
 	"snkGithubActivityCalendar": {
@@ -125,8 +125,8 @@
 		"width": 180,
 		"height": 120,
 		"order": 2,
-		"offsetX": 214,
-		"offsetY": -73,
+		"offsetX": 207,
+		"offsetY": -154,
 		"enabled": true
 	}
 }
