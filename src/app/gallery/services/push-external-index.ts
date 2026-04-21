@@ -1,4 +1,4 @@
-import { toBase64Utf8, createBlob, createTree, createCommit, updateRef, getRef, type TreeItem } from '@/lib/github-client'
+import { toBase64Utf8, createBlob, createTree, createCommit, updateRef, getRef, readTextFileFromRepo, type TreeItem } from '@/lib/github-client'
 import { getAuthToken } from '@/lib/auth'
 import { GITHUB_CONFIG } from '@/consts'
 
@@ -28,6 +28,30 @@ export async function pushExternalIndex(urlsOrItems: string[] | ExternalIndexIte
 	const indexJson = JSON.stringify(indexData, null, '\t')
 
 	let lastError: Error | null = null
+
+	// 首先检查文件是否有实际变化
+	console.log('[pushExternalIndex] 检查 external-index.json 是否有变化...')
+	const previousIndexJson = await readTextFileFromRepo(
+		token,
+		GITHUB_CONFIG.OWNER,
+		GITHUB_CONFIG.REPO,
+		'public/gallery/external-index.json',
+		GITHUB_CONFIG.BRANCH
+	)
+
+	if (previousIndexJson) {
+		try {
+			const previousData = JSON.parse(previousIndexJson)
+			const previousIndexJsonFormatted = JSON.stringify(previousData, null, '\t')
+			if (previousIndexJsonFormatted === indexJson) {
+				console.log('[pushExternalIndex] external-index.json 内容未变化，跳过提交')
+				return
+			}
+		} catch (error) {
+			console.error('[pushExternalIndex] Failed to compare external-index.json:', error)
+			// 如果比较失败，继续提交
+		}
+	}
 
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
 		try {

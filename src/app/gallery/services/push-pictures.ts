@@ -136,13 +136,32 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 	}
 
 	const picturesJson = JSON.stringify(updatedPictures, null, '\t')
-	const picturesBlob = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(picturesJson), 'base64')
-	treeItems.push({
-		path: 'src/app/gallery/list.json',
-		mode: '100644',
-		type: 'blob',
-		sha: picturesBlob.sha
-	})
+	
+	// 检查 list.json 是否有实际变化
+	let shouldUpdateListJson = true
+	if (previousListJson) {
+		try {
+			const previousJson = JSON.stringify(JSON.parse(previousListJson), null, '\t')
+			if (previousJson === picturesJson) {
+				console.log('list.json 内容未变化，跳过提交')
+				shouldUpdateListJson = false
+			}
+		} catch (error) {
+			console.error('Failed to compare list.json:', error)
+			// 如果比较失败，仍然提交
+			shouldUpdateListJson = true
+		}
+	}
+
+	if (shouldUpdateListJson) {
+		const picturesBlob = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(picturesJson), 'base64')
+		treeItems.push({
+			path: 'src/app/gallery/list.json',
+			mode: '100644',
+			type: 'blob',
+			sha: picturesBlob.sha
+		})
+	}
 
 	toast.info('正在创建文件树...')
 
