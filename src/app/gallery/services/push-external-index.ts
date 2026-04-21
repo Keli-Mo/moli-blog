@@ -10,12 +10,10 @@ interface ExternalIndexItem {
 /**
  * 推送外部图源索引到 GitHub
  * 将检测到的有效图片 URL 列表（含标签）保存到 external-index.json
+ * 支持重试机制处理并发更新导致的 SHA 冲突
  */
-export async function pushExternalIndex(urlsOrItems: string[] | ExternalIndexItem[]): Promise<void> {
+export async function pushExternalIndex(urlsOrItems: string[] | ExternalIndexItem[], maxRetries = 3): Promise<void> {
 	const token = await getAuthToken()
-
-	const refData = await getRef(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, `heads/${GITHUB_CONFIG.BRANCH}`)
-	const latestCommitSha = refData.sha
 
 	// 兼容旧的 string[] 调用方式
 	const items: ExternalIndexItem[] = urlsOrItems.map(item =>
@@ -28,19 +26,52 @@ export async function pushExternalIndex(urlsOrItems: string[] | ExternalIndexIte
 	}
 
 	const indexJson = JSON.stringify(indexData, null, '\t')
-	const blobData = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(indexJson), 'base64')
 
-	const treeItems: TreeItem[] = [
-		{
-			path: 'public/gallery/external-index.json',
-			mode: '100644',
-			type: 'blob',
-			sha: blobData.sha
+	let lastError: Error | null = null
+
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			console.log(`[pushExternalIndex] 尝试推送 (${attempt}/${maxRetries})`)
+
+			// 每次尝试都重新获取最新的分支 SHA
+			const refData = await getRef(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, `heads/${GITHUB_CONFIG.BRANCH}`)
+			const latestCommitSha = refData.sha
+
+			const blobData = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(indexJson), 'base64')
+
+			const treeItems: TreeItem[] = [
+				{
+					path: 'public/gallery/external-index.json',
+					mode: '100644',
+					type: 'blob',
+					sha: blobData.sha
+				}
+			]
+
+			console.log('[pushExternalIndex] Tree items:', treeItems)
+			const treeData = await createTree(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, treeItems, latestCommitSha)
+			const commitData = await createCommit(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, '更新外部图源索引', treeData.sha, [latestCommitSha])
+			await updateRef(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, `heads/${GITHUB_CONFIG.BRANCH}`, commitData.sha)
+
+			console.log('[pushExternalIndex] 推送成功')
+			return
+		} catch (error: any) {
+			lastError = error
+			console.error(`[pushExternalIndex] 第 ${attempt} 次尝试失败:`, error?.message)
+
+			// 如果是 422 错误且还有重试次数，等待后重试
+			if (error?.status === 422 && attempt < maxRetries) {
+				const delayMs = 500 * attempt // 指数退避：500ms, 1000ms, 1500ms
+				console.log(`[pushExternalIndex] 等待 ${delayMs}ms 后重试...`)
+				await new Promise(resolve => setTimeout(resolve, delayMs))
+				continue
+			}
+
+			// 其他错误或已达最大重试次数，直接抛出
+			throw error
 		}
-	]
+	}
 
-	console.log('[pushExternalIndex] Tree items:', treeItems)
-	const treeData = await createTree(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, treeItems, latestCommitSha)
-	const commitData = await createCommit(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, '更新外部图源索引', treeData.sha, [latestCommitSha])
-	await updateRef(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, `heads/${GITHUB_CONFIG.BRANCH}`, commitData.sha)
+	// 所有重试都失败
+	throw lastError || new Error('Failed to push external index after retries')
 }
