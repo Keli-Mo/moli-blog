@@ -5,6 +5,8 @@ import { motion } from 'motion/react'
 import { toast } from 'sonner'
 import initialList from './list.json'
 import { MasonicLayout } from './components/masonic-layout'
+import { TagSidebar } from './components/tag-sidebar'
+import { TagSidebarToggle } from './components/tag-sidebar-toggle'
 import UploadDialog from './components/upload-dialog'
 import ExternalSourceDialog from './components/external-source-config'
 import { pushPictures } from './services/push-pictures'
@@ -29,21 +31,29 @@ export interface Picture {
 	description?: string
 	image?: string
 	images?: string[]
+	tags?: string[]
+}
+
+interface ExternalIndexItem {
+	url: string
+	tags?: string[]
 }
 
 interface ExternalIndex {
 	updatedAt: string
-	urls: string[]
+	urls?: string[]
+	items?: ExternalIndexItem[]
 }
 
 /**
- * 将 URL 列表转换为 Picture 对象
+ * 将外部图源 items 转换为 Picture 对象
  */
-function urlsToPictures(urls: string[]): Picture[] {
-	return urls.map((url, index) => ({
+function itemsToPictures(items: ExternalIndexItem[]): Picture[] {
+	return items.map((item, index) => ({
 		id: `external-${index}`,
 		uploadedAt: new Date().toISOString(),
-		images: [url]
+		images: [item.url],
+		tags: item.tags || []
 	}))
 }
 
@@ -101,6 +111,11 @@ export default function GalleryPage() {
 	const [isChecking, setIsChecking] = useState(false)
 	const [checkProgress, setCheckProgress] = useState({ current: 0, total: 0 })
 
+	// 侧边栏状态
+	const [sidebarOpen, setSidebarOpen] = useState(false)
+	const [sidebarMode, setSidebarMode] = useState<'filter' | 'edit'>('filter')
+	const [currentEditingPictureId, setCurrentEditingPictureId] = useState<string | null>(null)
+
 	const [imageItems, setImageItems] = useState<Map<string, ImageItem>>(new Map())
 	const keyInputRef = useRef<HTMLInputElement>(null)
 	const router = useRouter()
@@ -128,11 +143,18 @@ export default function GalleryPage() {
 				setExternalUrls([])
 				return
 			}
-			const data: ExternalIndex = await response.json()
-			const urls = (data.urls || []).filter(url => url && url.trim() !== '')
-			console.log(`[Gallery] 加载索引成功: ${urls.length} 张图片`, urls)
+		const data: ExternalIndex = await response.json()
+			// 兼容旧格式（urls 数组）和新格式（items 数组）
+			let items: ExternalIndexItem[]
+			if (data.items && data.items.length > 0) {
+				items = data.items.filter(item => item.url && item.url.trim() !== '')
+			} else {
+				items = (data.urls || []).filter(url => url && url.trim() !== '').map(url => ({ url }))
+			}
+			const urls = items.map(item => item.url)
+			console.log(`[Gallery] 加载索引成功: ${items.length} 张图片`, urls)
 			setExternalUrls(urls)
-			setExternalPictures(urlsToPictures(urls))
+			setExternalPictures(itemsToPictures(items))
 		} catch (err) {
 			console.error('[Gallery] 加载索引失败:', err)
 			setExternalPictures([])
@@ -215,8 +237,18 @@ export default function GalleryPage() {
 		})
 
 		// 更新本地状态（不刷新页面）
+		// 合并时保留已有标签
+		const existingTagsMap = new Map<string, string[]>()
+		externalPictures.forEach(p => {
+			const url = p.images?.[0]
+			if (url && p.tags && p.tags.length > 0) existingTagsMap.set(url, p.tags)
+		})
+		const newItems: ExternalIndexItem[] = newUrls.map(url => ({
+			url,
+			tags: existingTagsMap.get(url) || []
+		}))
 		setExternalUrls(newUrls)
-		setExternalPictures(urlsToPictures(newUrls))
+		setExternalPictures(itemsToPictures(newItems))
 		setIsChecking(false)
 
 		// 如果已登录，保存到 GitHub
@@ -241,6 +273,21 @@ export default function GalleryPage() {
 			)
 		}
 	}, [externalUrls, isAuth, isChecking])
+
+	/**
+	 * 更新图片标签
+	 */
+	const handleTagsChange = useCallback((pictureId: string, tags: string[]) => {
+		if (pictureId.startsWith('external-')) {
+			setExternalPictures(prev =>
+				prev.map(p => (p.id === pictureId ? { ...p, tags } : p))
+			)
+		} else {
+			setLocalPictures(prev =>
+				prev.map(p => (p.id === pictureId ? { ...p, tags } : p))
+			)
+		}
+	}, [])
 
 	/**
 	 * 合并本地图片和外部图源图片
@@ -372,16 +419,27 @@ export default function GalleryPage() {
 	}
 
 	/**
-	 * 保存修改到 GitHub
+	 * 保存修改到 GitHub（本地图片 + 外部图源标签）
 	 */
 	const handleSave = async () => {
 		setIsSaving(true)
 
 		try {
+			// 保存本地图片
 			await pushPictures({
 				pictures: localPictures,
 				imageItems
 			})
+
+			// 同时保存外部图源索引（含标签）
+			if (externalPictures.length > 0) {
+				const { pushExternalIndex } = await import('./services/push-external-index')
+				const externalItems = externalPictures.map(p => ({
+					url: p.images?.[0] || '',
+					tags: p.tags || []
+				})).filter(item => item.url)
+				await pushExternalIndex(externalItems)
+			}
 
 			setOriginalPictures(localPictures)
 			setImageItems(new Map())
@@ -431,13 +489,23 @@ export default function GalleryPage() {
 				}}
 			/>
 
-			{/* 瀑布流布局容器 */}
+		{/* 瀑布流布局容器 */}
 			<MasonicLayout
 				pictures={allPictures}
 				isEditMode={isEditMode}
 				onDeleteSingle={handleDeleteSingleImage}
 				onDeleteGroup={handleDeleteGroup}
 				onImageError={handleImageError}
+				onTagsChange={handleTagsChange}
+				onLightboxOpen={(pictureId) => {
+					setCurrentEditingPictureId(pictureId)
+					setSidebarMode('edit')
+					setSidebarOpen(true)
+				}}
+				onLightboxClose={() => {
+					setCurrentEditingPictureId(null)
+					setSidebarMode('filter')
+				}}
 			/>
 
 			{/* 空状态提示 */}
@@ -446,6 +514,26 @@ export default function GalleryPage() {
 					还没有上传图片，点击右上角「编辑」后即可开始上传。
 				</div>
 			)}
+
+			{/* 侧边栏 */}
+			<TagSidebar
+				isOpen={sidebarOpen}
+				onClose={() => setSidebarOpen(false)}
+				mode={sidebarMode}
+				allTags={Array.from(new Set(allPictures.flatMap(p => p.tags || []))).sort()}
+				activeTags={[]}
+				onTagToggle={() => {}}
+				onTagsClear={() => {}}
+				currentPictureTags={currentEditingPictureId ? allPictures.find(p => p.id === currentEditingPictureId)?.tags || [] : []}
+				onCurrentPictureTagsChange={currentEditingPictureId ? (tags) => handleTagsChange(currentEditingPictureId, tags) : undefined}
+			/>
+
+			{/* 侧边栏展开按钮 */}
+			<TagSidebarToggle
+				onClick={() => setSidebarOpen(!sidebarOpen)}
+				mode={sidebarMode}
+				tagCount={sidebarMode === 'edit' && currentEditingPictureId ? (allPictures.find(p => p.id === currentEditingPictureId)?.tags?.length || 0) : 0}
+			/>
 
 			{/* 操作按钮工具栏 */}
 			<motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} className='absolute top-4 right-6 flex gap-3 max-sm:hidden'>
