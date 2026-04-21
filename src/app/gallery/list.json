@@ -4,6 +4,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/043e88bf6b427bb8.webp"
+		],
+		"tags": [
+			"风景",
+			"旅行"
 		]
 	},
 	{
@@ -11,6 +15,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/328a83a46afe97d5.webp"
+		],
+		"tags": [
+			"人物",
+			"肖像"
 		]
 	},
 	{
@@ -18,6 +26,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/614a7ba59af460b7.webp"
+		],
+		"tags": [
+			"建筑",
+			"城市"
 		]
 	},
 	{
@@ -25,6 +37,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/776ef407df1aed7d.webp"
+		],
+		"tags": [
+			"风景",
+			"自然"
 		]
 	},
 	{
@@ -32,6 +48,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/521584fbd7c8c471.webp"
+		],
+		"tags": [
+			"美食",
+			"生活"
 		]
 	},
 	{
@@ -39,6 +59,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/9303958202e2bcd8.webp"
+		],
+		"tags": [
+			"旅行",
+			"城市"
 		]
 	},
 	{
@@ -46,6 +70,10 @@
 		"uploadedAt": "2026-03-30T12:00:00.000Z",
 		"images": [
 			"/images/pictures/db6cb25835721682.webp"
+		],
+		"tags": [
+			"自然",
+			"生活"
 		]
 	}
 ]
