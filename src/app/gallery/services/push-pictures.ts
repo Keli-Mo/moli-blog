@@ -9,11 +9,12 @@ import { Picture } from '../page'
 
 export type PushPicturesParams = {
 	pictures: Picture[]
+	originalPictures?: Picture[]
 	imageItems?: Map<string, ImageItem>
 }
 
 export async function pushPictures(params: PushPicturesParams): Promise<void> {
-	const { pictures, imageItems } = params
+	const { pictures, originalPictures, imageItems } = params
 
 	const token = await getAuthToken()
 
@@ -138,19 +139,43 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 	const picturesJson = JSON.stringify(updatedPictures, null, '\t')
 	
 	// 检查 list.json 是否有实际变化
+	// 优先比较：originalPictures（初始状态）vs updatedPictures（当前状态）
+	// 如果用户没有修改任何数据，就不需要提交
 	let shouldUpdateListJson = true
-	if (previousListJson) {
+	
+	if (originalPictures && originalPictures.length > 0) {
+		try {
+			const originalJson = JSON.stringify(originalPictures, null, '\t')
+			const currentJson = JSON.stringify(updatedPictures, null, '\t')
+			
+			if (originalJson === currentJson) {
+				console.log('[pushPictures] 用户未修改任何数据，跳过提交 list.json')
+				shouldUpdateListJson = false
+			} else {
+				console.log('[pushPictures] 用户修改了数据，准备提交 list.json')
+				console.log('[pushPictures] 原始数据:', originalJson.substring(0, 100))
+				console.log('[pushPictures] 当前数据:', currentJson.substring(0, 100))
+			}
+		} catch (error) {
+			console.error('[pushPictures] Failed to compare with originalPictures:', error)
+			shouldUpdateListJson = true
+		}
+	} else if (previousListJson) {
+		// 如果没有 originalPictures，则比较与 GitHub 上的数据
 		try {
 			const previousJson = JSON.stringify(JSON.parse(previousListJson), null, '\t')
 			if (previousJson === picturesJson) {
-				console.log('list.json 内容未变化，跳过提交')
+				console.log('[pushPictures] list.json 与 GitHub 上的内容相同，跳过提交')
 				shouldUpdateListJson = false
+			} else {
+				console.log('[pushPictures] list.json 与 GitHub 上的内容不同，准备提交')
 			}
 		} catch (error) {
-			console.error('Failed to compare list.json:', error)
-			// 如果比较失败，仍然提交
+			console.error('[pushPictures] Failed to compare with GitHub:', error)
 			shouldUpdateListJson = true
 		}
+	} else {
+		console.log('[pushPictures] 首次提交 list.json')
 	}
 
 	if (shouldUpdateListJson) {
@@ -161,6 +186,7 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 			type: 'blob',
 			sha: picturesBlob.sha
 		})
+		console.log('已添加 list.json 到提交')
 	}
 
 	toast.info('正在创建文件树...')

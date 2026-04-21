@@ -430,6 +430,7 @@ export default function GalleryPage() {
 			// 保存本地图片
 			await pushPictures({
 				pictures: localPictures,
+				originalPictures,
 				imageItems
 			})
 
