@@ -287,6 +287,8 @@ export default function GalleryPage() {
 				prev.map(p => (p.id === pictureId ? { ...p, tags } : p))
 			)
 		}
+		// 标记为已修改
+		setIsEditMode(true)
 	}, [])
 
 	/**
