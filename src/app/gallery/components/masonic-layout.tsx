@@ -196,17 +196,12 @@ function ImageCard({
 			transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.6), ease: 'easeOut' }}
 			className='group relative overflow-hidden rounded-xl bg-zinc-900 cursor-pointer'
 			onClick={(e) => {
-				// 编辑模式下，如果点击的是标签编辑按钮或标签编辑器，不触发展开
-				if (isEditMode) {
-					const target = e.target as HTMLElement
-					if (target.closest('[data-tag-editor]') || target.closest('button[data-tag-button]')) {
-						return
-					}
+				const target = e.target as HTMLElement
+				// 点击标签编辑器或标签按钮时不触发灯箱
+				if (target.closest('[data-tag-editor]') || target.closest('button[data-tag-button]')) {
+					return
 				}
-				// 非编辑模式下，点击图片展开灯箱
-				if (!isEditMode) {
-					onExpand()
-				}
+				onExpand()
 			}}>
 
 			<img

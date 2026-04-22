@@ -157,6 +157,7 @@ export default function GalleryPage() {
 			console.log(`[Gallery] 加载索引成功: ${items.length} 张图片`, urls)
 			setExternalUrls(urls)
 			setExternalPictures(itemsToPictures(items))
+			setOriginalExternalPictures(itemsToPictures(items))
 		} catch (err) {
 			console.error('[Gallery] 加载索引失败:', err)
 			setExternalPictures([])
@@ -289,8 +290,8 @@ export default function GalleryPage() {
 				prev.map(p => (p.id === pictureId ? { ...p, tags } : p))
 			)
 		}
-		// 标记为已修改
-		setIsEditMode(true)
+		// 仅标记标签已修改，不触发顶部编辑菜单
+		setIsTagsModified(true)
 	}, [])
 
 	/**
@@ -423,6 +424,40 @@ export default function GalleryPage() {
 	}
 
 	/**
+	 * 仅保存标签修改（不上传图片文件）
+	 */
+	const handleSaveTags = async () => {
+		setIsSaving(true)
+		try {
+			await pushPictures({ pictures: localPictures, originalPictures, imageItems: new Map() })
+			if (externalPictures.length > 0) {
+				const { pushExternalIndex } = await import('./services/push-external-index')
+				const externalItems = externalPictures
+					.map(p => ({ url: p.images?.[0] || '', tags: p.tags || [] }))
+					.filter(item => item.url)
+				await pushExternalIndex(externalItems)
+			}
+			setOriginalPictures(localPictures)
+			setOriginalExternalPictures(externalPictures)
+			setIsTagsModified(false)
+			toast.success('标签保存成功！')
+		} catch (error: any) {
+			console.error('Failed to save tags:', error)
+			toast.error(`保存失败: ${error?.message || '未知错误'}`)
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
+	const handleSaveTagsClick = () => {
+		if (!isAuth) {
+			keyInputRef.current?.click()
+		} else {
+			handleSaveTags()
+		}
+	}
+
+	/**
 	 * 保存修改到 GitHub（本地图片 + 外部图源标签）
 	 */
 	const handleSave = async () => {
@@ -447,8 +482,10 @@ export default function GalleryPage() {
 			}
 
 			setOriginalPictures(localPictures)
+			setOriginalExternalPictures(externalPictures)
 			setImageItems(new Map())
 			setIsEditMode(false)
+			setIsTagsModified(false)
 			toast.success('保存成功！')
 		} catch (error: any) {
 			console.error('Failed to save:', error)
@@ -460,8 +497,10 @@ export default function GalleryPage() {
 
 	const handleCancel = () => {
 		setLocalPictures(originalPictures)
+		setExternalPictures(originalExternalPictures)
 		setImageItems(new Map())
 		setIsEditMode(false)
+		setIsTagsModified(false)
 	}
 
 	const buttonText = isAuth ? '保存' : '导入密钥'
@@ -542,6 +581,27 @@ export default function GalleryPage() {
 
 			{/* 操作按钮工具栏 */}
 			<motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} className='absolute top-4 right-6 flex gap-3 max-sm:hidden'>
+				{/* 仅标签修改时显示，不进入完整编辑模式 */}
+				{isTagsModified && !isEditMode && (
+					<>
+						<motion.button
+							whileHover={{ scale: 1.05 }}
+							whileTap={{ scale: 0.95 }}
+							onClick={handleCancel}
+							disabled={isSaving}
+							className='rounded-xl border bg-white/60 px-6 py-2 text-sm backdrop-blur-sm'>
+							取消
+						</motion.button>
+						<motion.button
+							whileHover={{ scale: 1.05 }}
+							whileTap={{ scale: 0.95 }}
+							onClick={handleSaveTagsClick}
+							disabled={isSaving}
+							className='brand-btn px-6'>
+							{isSaving ? '保存中...' : (isAuth ? '保存标签' : '导入密钥')}
+						</motion.button>
+					</>
+				)}
 				{isEditMode ? (
 					<>
 						<motion.button
