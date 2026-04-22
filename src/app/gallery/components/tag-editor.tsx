@@ -70,6 +70,7 @@ export function TagEditor({ tags, onChange, onClose, allTags = [] }: TagEditorPr
 			exit={{ opacity: 0, scale: 0.95, y: 4 }}
 			transition={{ duration: 0.15 }}
 			onClick={e => e.stopPropagation()}
+			data-tag-editor
 			className='absolute bottom-full left-0 mb-2 z-50 w-64 rounded-xl border border-white/20 bg-zinc-900/95 backdrop-blur-md shadow-2xl p-3'>
 
 			<div className='flex items-center gap-1.5 mb-2'>

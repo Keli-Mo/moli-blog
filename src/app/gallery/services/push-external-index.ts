@@ -46,6 +46,10 @@ export async function pushExternalIndex(urlsOrItems: string[] | ExternalIndexIte
 			if (previousIndexJsonFormatted === indexJson) {
 				console.log('[pushExternalIndex] external-index.json 内容未变化，跳过提交')
 				return
+			} else {
+				console.log('[pushExternalIndex] external-index.json 内容有变化，准备提交')
+				console.log('[pushExternalIndex] 前一个版本项数:', previousData.items?.length || previousData.urls?.length || 0)
+				console.log('[pushExternalIndex] 当前版本项数:', items.length)
 			}
 		} catch (error) {
 			console.error('[pushExternalIndex] Failed to compare external-index.json:', error)

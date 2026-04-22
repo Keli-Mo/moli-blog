@@ -155,6 +155,20 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 				console.log('[pushPictures] 用户修改了数据，准备提交 list.json')
 				console.log('[pushPictures] 原始数据:', originalJson.substring(0, 100))
 				console.log('[pushPictures] 当前数据:', currentJson.substring(0, 100))
+				// 详细对比：检查是否只有标签变化
+				const originalPicturesWithoutTags = JSON.stringify(
+					originalPictures.map(p => ({ ...p, tags: [] })),
+					null,
+					'\t'
+				)
+				const updatedPicturesWithoutTags = JSON.stringify(
+					updatedPictures.map(p => ({ ...p, tags: [] })),
+					null,
+					'\t'
+				)
+				if (originalPicturesWithoutTags === updatedPicturesWithoutTags) {
+					console.log('[pushPictures] 仅标签发生变化，需要提交')
+				}
 			}
 		} catch (error) {
 			console.error('[pushPictures] Failed to compare with originalPictures:', error)

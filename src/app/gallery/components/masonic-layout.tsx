@@ -195,7 +195,19 @@ function ImageCard({
 			animate={{ opacity: isLoaded ? 1 : 0, y: isLoaded ? 0 : 20 }}
 			transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.6), ease: 'easeOut' }}
 			className='group relative overflow-hidden rounded-xl bg-zinc-900 cursor-pointer'
-			onClick={!isEditMode ? onExpand : undefined}>
+			onClick={(e) => {
+				// 编辑模式下，如果点击的是标签编辑按钮或标签编辑器，不触发展开
+				if (isEditMode) {
+					const target = e.target as HTMLElement
+					if (target.closest('[data-tag-editor]') || target.closest('button[data-tag-button]')) {
+						return
+					}
+				}
+				// 非编辑模式下，点击图片展开灯箱
+				if (!isEditMode) {
+					onExpand()
+				}
+			}}>
 
 			<img
 				src={url}
@@ -255,6 +267,7 @@ function ImageCard({
 						whileHover={{ opacity: 1 }}
 						whileTap={{ scale: 0.9 }}
 						onClick={e => { e.stopPropagation(); setShowTagEditor(v => !v) }}
+						data-tag-button
 						className={`absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg text-white text-[10px] transition-colors cursor-pointer opacity-0 group-hover:opacity-100 ${
 							tags && tags.length > 0 ? 'bg-indigo-500/90 hover:bg-indigo-600' : 'bg-black/60 hover:bg-black/80'
 						}`}>

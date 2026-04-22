@@ -98,7 +98,9 @@ async function checkImageExists(url: string): Promise<boolean> {
 export default function GalleryPage() {
 	const [localPictures, setLocalPictures] = useState<Picture[]>(initialList as Picture[])
 	const [originalPictures, setOriginalPictures] = useState<Picture[]>(initialList as Picture[])
+	const [originalExternalPictures, setOriginalExternalPictures] = useState<Picture[]>([])
 	const [isEditMode, setIsEditMode] = useState(false)
+	const [isTagsModified, setIsTagsModified] = useState(false)
 	const [isSaving, setIsSaving] = useState(false)
 	const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
 	const [isExternalSourceOpen, setIsExternalSourceOpen] = useState(false)
