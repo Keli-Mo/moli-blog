@@ -425,18 +425,20 @@ export default function GalleryPage() {
 
 	/**
 	 * 仅保存标签修改（不上传图片文件）
+	 * list.json 与 external-index.json 合并为一次 commit，避免 422
 	 */
 	const handleSaveTags = async () => {
 		setIsSaving(true)
 		try {
-			await pushPictures({ pictures: localPictures, originalPictures, imageItems: new Map() })
-			if (externalPictures.length > 0) {
-				const { pushExternalIndex } = await import('./services/push-external-index')
-				const externalItems = externalPictures
-					.map(p => ({ url: p.images?.[0] || '', tags: p.tags || [] }))
-					.filter(item => item.url)
-				await pushExternalIndex(externalItems)
-			}
+			const externalItems = externalPictures
+				.map(p => ({ url: p.images?.[0] || '', tags: p.tags || [] }))
+				.filter(item => item.url)
+			await pushPictures({
+				pictures: localPictures,
+				originalPictures,
+				imageItems: new Map(),
+				externalItems: externalItems.length > 0 ? externalItems : undefined
+			})
 			setOriginalPictures(localPictures)
 			setOriginalExternalPictures(externalPictures)
 			setIsTagsModified(false)
@@ -464,22 +466,16 @@ export default function GalleryPage() {
 		setIsSaving(true)
 
 		try {
-			// 保存本地图片
+			// list.json 与 external-index.json 合并为一次 commit，避免串行提交导致 422
+			const externalItems = externalPictures
+				.map(p => ({ url: p.images?.[0] || '', tags: p.tags || [] }))
+				.filter(item => item.url)
 			await pushPictures({
 				pictures: localPictures,
 				originalPictures,
-				imageItems
+				imageItems,
+				externalItems: externalItems.length > 0 ? externalItems : undefined
 			})
-
-			// 同时保存外部图源索引（含标签）
-			if (externalPictures.length > 0) {
-				const { pushExternalIndex } = await import('./services/push-external-index')
-				const externalItems = externalPictures.map(p => ({
-					url: p.images?.[0] || '',
-					tags: p.tags || []
-				})).filter(item => item.url)
-				await pushExternalIndex(externalItems)
-			}
 
 			setOriginalPictures(localPictures)
 			setOriginalExternalPictures(externalPictures)

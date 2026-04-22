@@ -7,14 +7,21 @@ import { getFileExt } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Picture } from '../page'
 
+interface ExternalIndexItem {
+	url: string
+	tags?: string[]
+}
+
 export type PushPicturesParams = {
 	pictures: Picture[]
 	originalPictures?: Picture[]
 	imageItems?: Map<string, ImageItem>
+	/** 同时更新外部图源索引，与 list.json 合并为一次 commit，避免 422 竞争 */
+	externalItems?: ExternalIndexItem[]
 }
 
 export async function pushPictures(params: PushPicturesParams): Promise<void> {
-	const { pictures, originalPictures, imageItems } = params
+	const { pictures, originalPictures, imageItems, externalItems } = params
 
 	const token = await getAuthToken()
 
@@ -153,6 +160,20 @@ export async function pushPictures(params: PushPicturesParams): Promise<void> {
 			sha: picturesBlob.sha
 		})
 		console.log('已添加 list.json 到提交')
+	}
+
+	// 将外部图源索引与 list.json 合并进同一次 commit，避免两次串行提交导致 422
+	if (externalItems) {
+		const indexData = { updatedAt: new Date().toISOString(), items: externalItems }
+		const indexJson = JSON.stringify(indexData, null, '\t')
+		const indexBlob = await createBlob(token, GITHUB_CONFIG.OWNER, GITHUB_CONFIG.REPO, toBase64Utf8(indexJson), 'base64')
+		treeItems.push({
+			path: 'public/gallery/external-index.json',
+			mode: '100644',
+			type: 'blob',
+			sha: indexBlob.sha
+		})
+		console.log('已添加 external-index.json 到提交')
 	}
 
 	toast.info('正在创建文件树...')
