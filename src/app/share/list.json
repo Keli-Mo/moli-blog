@@ -242,5 +242,15 @@
 			"图片"
 		],
 		"stars": 5
+	},
+	{
+		"name": "打印markdow的工具站",
+		"logo": "https://tool.lu/favicon.ico",
+		"url": " tool.lu/markdown",
+		"description": "1",
+		"tags": [
+			"markdown"
+		],
+		"stars": 5
 	}
 ]
